@@ -1,0 +1,54 @@
+resource "solace_msgvpn" "vpn3" {
+  name                 = "vpn3"
+  enabled              = true
+  max_connection_count = 50
+}
+
+resource "solace_aclprofile" "my-acl" {
+  msg_vpn                          = solace_msgvpn.vpn3.name
+  name                             = "my-acl"
+  client_connection_default_action = "disallow"
+  publish_topic_default_action     = "disallow"
+  subscribe_topic_default_action   = "disallow"
+}
+
+resource "solace_aclprofile_clientconnexception" "my-machine-exc" {
+  msg_vpn     = solace_msgvpn.vpn3.name
+  acl_profile = solace_aclprofile.my-acl.name
+  address     = "127.0.0.1/10"
+}
+
+resource "solace_aclprofile_publishexception" "my-mon-allow" {
+  msg_vpn      = solace_msgvpn.vpn3.name
+  acl_profile  = solace_aclprofile.my-acl.name
+  topic_syntax = "smf"
+  topic        = "box-foobar/>"
+}
+
+resource "solace_aclprofile_subscribeexception" "my-sub-allow" {
+  msg_vpn      = solace_msgvpn.vpn3.name
+  acl_profile  = solace_aclprofile.my-acl.name
+  topic_syntax = "smf"
+  topic        = "box3-foobar/>"
+}
+
+resource "solace_aclprofile_subscribeexception" "my-imported-sub" {
+  msg_vpn      = solace_msgvpn.vpn3.name
+  acl_profile  = solace_aclprofile.my-acl.name
+  topic        = "box-import-topi/>"
+  topic_syntax = "smf"
+}
+
+resource "solace_aclprofile_subscribeexception" "my-sub-mqtt-allow" {
+  msg_vpn      = solace_msgvpn.vpn3.name
+  acl_profile  = solace_aclprofile.my-acl.name
+  topic_syntax = "mqtt"
+  topic        = "box3-mqtt-foobar/>"
+}
+
+resource "solace_clientusername" "vpn3_user2" {
+  msg_vpn     = solace_msgvpn.vpn3.name
+  acl_profile = solace_aclprofile.my-acl.name
+  name        = "user2"
+  enabled     = true
+}

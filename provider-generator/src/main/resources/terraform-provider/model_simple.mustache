@@ -1,0 +1,64 @@
+
+// {{classname}} {{{description}}}{{^description}}struct for {{{classname}}}{{/description}}
+type {{classname}} struct {
+{{#parent}}
+{{^isMap}}
+{{^isArray}}
+	{{{parent}}}
+{{/isArray}}
+{{/isMap}}
+{{#isArray}}
+	Items {{{parent}}}
+{{/isArray}}
+{{/parent}}
+{{#vars}}
+{{^-first}}
+{{/-first}}
+	{{name}} {{^isNullable}}*{{/isNullable}}{{{dataType}}} `tfsdk:"{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}"`
+{{/vars}}
+}
+
+func (tfData *{{classname}}) ToTF(apiData *sempv2.{{classname}}) {
+	{{#vars}}
+	AssignIfDstNotNil(&tfData.{{name}}, apiData.{{name}})
+	{{/vars}}
+}
+
+func (tfData *{{classname}}) ToApi() sempv2.{{classname}} {
+	return sempv2.{{classname}} {
+		{{#vars}}
+		{{name}}: tfData.{{name}},
+		{{/vars}}
+	}
+}
+
+// Terraform schema for {{classname}}
+func {{classname}}Schema(requiredAttributes ...string) tfsdk.Schema {
+	schema := tfsdk.Schema{
+		Description: "{{{description}}}{{^description}}{{classname}}{{/description}}",
+		Attributes: map[string]tfsdk.Attribute{
+			{{#vars}}
+			"{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}": {
+				Type: {{#tfType}}{{dataType}}{{/tfType}},
+				Description: "{{{description}}}",
+				{{#required}}
+				Required:    true,
+				{{/required}}
+				{{^required}}
+				Optional:    true,
+				{{/required}}
+				// PlanModifiers: []tfsdk.AttributePlanModifier{
+				// 	tfsdk.RequiresReplace(),
+				// },
+				{{#allowableValues}}
+				Validators: []tfsdk.AttributeValidator{
+					util.StringOneOfValidator({{#enumVars}}{{^-first}},{{/-first}}{{{value}}}{{/enumVars}}),
+				},
+				{{/allowableValues}}
+			},
+			{{/vars}}
+		},
+	}
+
+	return WithRequiredAttributes(schema, requiredAttributes)
+}

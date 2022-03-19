@@ -1,0 +1,20 @@
+package {{packageName}}
+
+{{#models}}
+import (
+	"telusag/terraform-provider-solace/sempv2"
+	"telusag/terraform-provider-solace/util"
+	
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+{{#model}}
+{{#isEnum}}
+{{>model_enum}}
+{{/isEnum}}
+{{^isEnum}}
+{{#oneOf}}{{#-first}}{{>model_oneof}}{{/-first}}{{/oneOf}}{{^oneOf}}{{#anyOf}}{{#-first}}{{>model_anyof}}{{/-first}}{{/anyOf}}{{^anyOf}}{{>model_simple}}{{/anyOf}}{{/oneOf}}
+{{/isEnum}}
+{{/model}}
+{{/models}}
