@@ -1,0 +1,356 @@
+openapi: '3.0.2'
+info:
+  title: Terraform Private Registry
+  version: '1.0'
+servers:
+  - url: https://app.terraform.io/api
+
+paths:
+  /registry/private/v2/gpg-keys:
+    post:
+      operationId: CreateGpgKey
+      summary: Create a new GPG key
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/gpg-key'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/gpg-key-response'
+  /v2/organizations/{organization}/registry-providers:
+    get:
+      operationId: GetProviders
+      parameters:
+        - $ref: '#/components/parameters/organization'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/registry-providers-response'
+
+    post:
+      summary: Create a new provider
+      operationId: CreateProvider
+      parameters:
+        - $ref: '#/components/parameters/organization'
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/registry-provider'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/create-registry-provider-response'
+  /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions:
+    parameters:
+        - $ref: '#/components/parameters/organization'
+        - $ref: '#/components/parameters/name'
+    get:
+      operationId: GetProviderVersions
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/registry-provider-versions-response'
+
+    post:
+      operationId: CreateProviderVersion
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/create-registry-provider-version'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/create-registry-provider-version-response'
+          
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    gpg-key:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            attributes:
+              type: object
+              properties:
+                namespace:
+                  type: string
+                ascii-armor:
+                  type: string
+    gpg-key-response:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            attributes:
+              type: object
+              properties:
+                namespace:
+                  type: string
+                ascii-armor:
+                  type: string
+                key-id:
+                  type: string
+                created-at:
+                  type: string
+                  format: timestamp
+                updated-at:
+                  type: string
+                  format: timestamp
+    registry-provider:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - registry-providers
+            attributes:
+              type: object
+              properties:
+                name:
+                  type: string
+                namespace: 
+                  type: string
+                registry-name:
+                  type: string
+              required:
+                - name
+                - namespace
+                - registry-name
+          required:
+            - type
+            - attributes
+      required:
+        - data
+    create-registry-provider-response:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+              enum:
+                - registry-providers
+            attributes:
+              type: object
+              properties:
+                name:
+                  type: string
+                namespace:
+                  type: string
+                created-at:
+                  type: string
+                  format: timestamp
+                updated-at:
+                  type: string
+                  format: timestamp
+                registry-name:
+                  type: string
+                permissions:
+                  type: object
+                  properties:
+                    can-delete:
+                      type: boolean
+    registry-providers-response:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+                enum:
+                  - registry-providers
+              attributes:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  created-at:
+                    type: string
+                    format: timestamp
+                  updated-at:
+                    type: string
+                    format: timestamp
+                  registry-name:
+                    type: string
+                  permissions:
+                    type: object
+                    properties:
+                      can-delete:
+                        type: boolean
+    registry-provider-versions-response:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+                enum:
+                  - registry-provider-versions
+              attributes:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  created-at:
+                    type: string
+                    format: timestamp
+                  updated-at:
+                    type: string
+                    format: timestamp
+                  key-id:
+                    type: string
+                  registry-name:
+                    type: string
+                  permissions:
+                    type: object
+                    properties:
+                      can-delete:
+                        type: boolean    
+                      can-upload-asset:
+                        type: boolean
+                  shasums-uploaded:
+                    type: boolean
+                  shasums-sig-uploaded:
+                    type: boolean
+    create-registry-provider-version:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - registry-provider-versions
+            attributes:
+              type: object
+              properties:
+                version:
+                  type: string
+                key-id: 
+                  type: string
+                protocols:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - version
+                - key-id
+                - protocols
+          required:
+            - type
+            - attributes
+      required:
+        - data
+    create-registry-provider-version-response:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+                enum:
+                  - registry-provider-versions
+              attributes:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  created-at:
+                    type: string
+                    format: timestamp
+                  updated-at:
+                    type: string
+                    format: timestamp
+                  key-id:
+                    type: string
+                  registry-name:
+                    type: string
+                  permissions:
+                    type: object
+                    properties:
+                      can-delete:
+                        type: boolean    
+                      can-upload-asset:
+                        type: boolean
+                  shasums-uploaded:
+                    type: boolean
+                  shasums-sig-uploaded:
+                    type: boolean
+        links:
+          type: object
+          properties:
+            shasums-upload:
+              type: string
+            shasums-sig-upload:
+              type: string
+
+  parameters:
+    organization:
+      name: organization
+      in: path
+      required: true
+      schema:
+        type: string
+    name:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+
+security:
+  - bearerAuth: []
