@@ -18,3 +18,8 @@ generate-provider: openapi-provider-generator
 
 install:
 	cd terraform-provider-solace; go install
+
+release:
+	GITHUB_TOKEN=$(GITHUB_TOKEN) \
+	GPG_FINGERPRINT=$(GPG_FINGERPRINT) \
+		goreleaser release --snapshot --rm-dist
