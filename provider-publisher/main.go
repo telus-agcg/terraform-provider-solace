@@ -1,9 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"regexp"
+	"strings"
 
 	"telusag/provider-publisher/tfclient"
 
@@ -11,6 +19,10 @@ import (
 )
 
 const org string = "telusagriculture"
+const tok string = "VL6OpSEGpgaSUg.atlasv1.FPF3fIrNcFMVAOk3EFnBQBsDxy0nXHMRJmAX9OJiVbjYUX9ZemhBDaFy7YDd2LCcy4U"
+const nam string = "solace"
+const ver string = "0.1.0"
+const key string = "14F5FEA3B2DA691F"
 
 var ctx context.Context
 var client *tfclient.APIClient
@@ -26,17 +38,113 @@ func main() {
 	httpClient, err := rt.TLSClient(
 		rt.TLSClientOptions{InsecureSkipVerify: true})
 	if err != nil {
-		fmt.Println("Unable to create HTTPS client")
+		log.Fatal("Unable to create HTTPS client")
 	}
 	config.HTTPClient = httpClient
 
 	client = tfclient.NewAPIClient(config)
 
 	CreateProvider("solace")
-	CreateProviderVersion("solace", "0.1.0")
+	uploadLinks := CreateProviderVersion(nam, ver, key)
+
+	nameAndVersion := fmt.Sprintf("terraform-provider-%s_%s", nam, ver)
+
+	UploadFile(nameAndVersion+"_SHA256SUMS", "SHA256SUMS", "text/plain", *uploadLinks.ShasumsUpload)
+	UploadFile(nameAndVersion+"_SHA256SUMS.sig", "SHA256SUMS.sig", "application/octet-stream", *uploadLinks.ShasumsSigUpload)
+
+	CreatePlatforms(nameAndVersion+"_SHA256SUMS", nam, ver)
 }
 
-func CreateProviderVersion(name string, version string) {
+func CreatePlatforms(sumsfile string, name string, version string) {
+	content, err := ioutil.ReadFile(sumsfile)
+	if err != nil {
+		log.Fatalf("Unable to open sums file %s", sumsfile)
+	}
+
+	// Get the sums and create a platform for each
+	re := regexp.MustCompile("^([0-9a-fA-F]+)  ([^_]+)_([^_]+)_([^_]+)_([^_]+).zip$")
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		for _, match := range re.FindAllStringSubmatch(line, -1) {
+			sum := match[1]
+			os := match[4]
+			arch := match[5]
+
+			CreatePlatform(name, version, os, arch, sum)
+		}
+	}
+}
+
+func CreatePlatform(name string, version string, os string, arch string, sum string) {
+	filename := fmt.Sprintf("terraform-provider-%s_%s_%s_%s.zip", name, version, os, arch)
+	createPlatform := tfclient.CreateProviderPlatform{
+		Data: &tfclient.CreateProviderPlatformData{
+			Attributes: tfclient.CreateProviderPlatformDataAttributes{
+				Os:       os,
+				Arch:     arch,
+				Shasum:   sum,
+				Filename: filename,
+			},
+		},
+	}
+	req := client.DefaultApi.CreateProviderPlatform(ctx, org, name, version).CreateProviderPlatform(createPlatform)
+	createPlatformRes, _, err := req.Execute()
+	if err != nil {
+		log.Fatalf("Error creating platform %s/%s: %s", os, arch, err.Error())
+	}
+
+	// Now upload the binary
+	UploadFile(filename, filename, "application/octet-stream", *createPlatformRes.Data.Links.ProviderBinaryUpload)
+}
+
+func UploadFile(filename string, remoteName string, contentType string, url string) {
+	log.Printf("Uploading %s", filename)
+
+	file, err := os.Open(filename)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile(contentType, remoteName)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	io.Copy(part, file)
+	writer.Close()
+	request, err := http.NewRequest("PUT", url, body)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	request.Header.Add("Content-Type", writer.FormDataContentType())
+	client := &http.Client{}
+
+	response, err := client.Do(request)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("Got %d: %s", response.StatusCode, response.Status)
+
+	defer response.Body.Close()
+
+	_, err = ioutil.ReadAll(response.Body)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return
+}
+
+func CreateProviderVersion(name string, version string, keyid string) *tfclient.CreateRegistryProviderVersionResponseDataLinks {
 	getProviderVersionsRes, _, err := client.DefaultApi.GetProviderVersions(
 		ctx, org, name).Execute()
 	if err != nil {
@@ -51,17 +159,16 @@ func CreateProviderVersion(name string, version string) {
 		}
 	}
 	if found {
-		fmt.Printf("Provider %s version %s already exists.\n", name, version)
-		return
+		log.Fatalf("Provider %s version %s already exists.\n", name, version)
 	}
 
-	fmt.Printf("Creating provider %s version %s\n", name, version)
+	log.Printf("Creating provider %s version %s\n", name, version)
 	providerVersion := tfclient.CreateRegistryProviderVersion{
 		Data: tfclient.CreateRegistryProviderVersionData{
 			Type: "registry-provider-versions",
 			Attributes: tfclient.CreateRegistryProviderVersionDataAttributes{
 				Version:   version,
-				KeyId:     "",
+				KeyId:     keyid,
 				Protocols: []string{"6.0"},
 			},
 		},
@@ -72,7 +179,7 @@ func CreateProviderVersion(name string, version string) {
 		log.Fatalf("Error creating %s, version %s: %s\n", name, version, err.Error())
 	}
 
-	fmt.Printf("%+v", createProviderVersionRes)
+	return createProviderVersionRes.Data.Links
 }
 
 func CreateProvider(name string) {
@@ -83,14 +190,14 @@ func CreateProvider(name string) {
 	}
 
 	if len(getProvidersRes.Data) == 0 {
-		fmt.Println("Creating provider")
+		log.Printf("Creating provider %s\n", name)
 
 		// Create the Solace provider
 		provider := tfclient.RegistryProvider{
 			Data: tfclient.RegistryProviderData{
 				Type: "registry-providers",
 				Attributes: tfclient.RegistryProviderDataAttributes{
-					Name:         "solace",
+					Name:         name,
 					Namespace:    org,
 					RegistryName: "private",
 				},
@@ -100,7 +207,7 @@ func CreateProvider(name string) {
 			CreateProvider(ctx, org).RegistryProvider(provider).
 			Execute()
 		if err != nil {
-			fmt.Printf("Error creating provider: %s\n", err.Error())
+			log.Printf("Error creating provider: %s\n", err.Error())
 		}
 	}
 }

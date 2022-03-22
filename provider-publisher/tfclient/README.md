@@ -80,13 +80,18 @@ Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *DefaultApi* | [**CreateGpgKey**](docs/DefaultApi.md#creategpgkey) | **Post** /registry/private/v2/gpg-keys | Create a new GPG key
 *DefaultApi* | [**CreateProvider**](docs/DefaultApi.md#createprovider) | **Post** /v2/organizations/{organization}/registry-providers | Create a new provider
+*DefaultApi* | [**CreateProviderPlatform**](docs/DefaultApi.md#createproviderplatform) | **Post** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms | 
 *DefaultApi* | [**CreateProviderVersion**](docs/DefaultApi.md#createproviderversion) | **Post** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions | 
+*DefaultApi* | [**GetProviderPlatform**](docs/DefaultApi.md#getproviderplatform) | **Get** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms/{os}/{arch} | 
 *DefaultApi* | [**GetProviderVersions**](docs/DefaultApi.md#getproviderversions) | **Get** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions | 
 *DefaultApi* | [**GetProviders**](docs/DefaultApi.md#getproviders) | **Get** /v2/organizations/{organization}/registry-providers | 
 
 
 ## Documentation For Models
 
+ - [CreateProviderPlatform](docs/CreateProviderPlatform.md)
+ - [CreateProviderPlatformData](docs/CreateProviderPlatformData.md)
+ - [CreateProviderPlatformDataAttributes](docs/CreateProviderPlatformDataAttributes.md)
  - [CreateRegistryProviderResponse](docs/CreateRegistryProviderResponse.md)
  - [CreateRegistryProviderResponseData](docs/CreateRegistryProviderResponseData.md)
  - [CreateRegistryProviderResponseDataAttributes](docs/CreateRegistryProviderResponseDataAttributes.md)
@@ -95,21 +100,28 @@ Class | Method | HTTP request | Description
  - [CreateRegistryProviderVersionData](docs/CreateRegistryProviderVersionData.md)
  - [CreateRegistryProviderVersionDataAttributes](docs/CreateRegistryProviderVersionDataAttributes.md)
  - [CreateRegistryProviderVersionResponse](docs/CreateRegistryProviderVersionResponse.md)
- - [CreateRegistryProviderVersionResponseLinks](docs/CreateRegistryProviderVersionResponseLinks.md)
+ - [CreateRegistryProviderVersionResponseData](docs/CreateRegistryProviderVersionResponseData.md)
+ - [CreateRegistryProviderVersionResponseDataLinks](docs/CreateRegistryProviderVersionResponseDataLinks.md)
  - [GpgKey](docs/GpgKey.md)
  - [GpgKeyData](docs/GpgKeyData.md)
  - [GpgKeyDataAttributes](docs/GpgKeyDataAttributes.md)
  - [GpgKeyResponse](docs/GpgKeyResponse.md)
  - [GpgKeyResponseData](docs/GpgKeyResponseData.md)
  - [GpgKeyResponseDataAttributes](docs/GpgKeyResponseDataAttributes.md)
+ - [Permissions](docs/Permissions.md)
+ - [ProviderPlatformResponse](docs/ProviderPlatformResponse.md)
+ - [ProviderPlatformResponseData](docs/ProviderPlatformResponseData.md)
+ - [ProviderPlatformResponseDataAttributes](docs/ProviderPlatformResponseDataAttributes.md)
+ - [ProviderPlatformResponseDataLinks](docs/ProviderPlatformResponseDataLinks.md)
  - [RegistryProvider](docs/RegistryProvider.md)
  - [RegistryProviderData](docs/RegistryProviderData.md)
  - [RegistryProviderDataAttributes](docs/RegistryProviderDataAttributes.md)
  - [RegistryProviderVersionsResponse](docs/RegistryProviderVersionsResponse.md)
  - [RegistryProviderVersionsResponseAttributes](docs/RegistryProviderVersionsResponseAttributes.md)
- - [RegistryProviderVersionsResponseAttributesPermissions](docs/RegistryProviderVersionsResponseAttributesPermissions.md)
  - [RegistryProviderVersionsResponseData](docs/RegistryProviderVersionsResponseData.md)
  - [RegistryProvidersResponse](docs/RegistryProvidersResponse.md)
+ - [RegistryProvidersResponseAttributes](docs/RegistryProvidersResponseAttributes.md)
+ - [RegistryProvidersResponseData](docs/RegistryProvidersResponseData.md)
 
 
 ## Documentation For Authorization

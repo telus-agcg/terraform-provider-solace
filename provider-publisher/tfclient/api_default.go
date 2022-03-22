@@ -247,6 +247,126 @@ func (a *DefaultApiService) CreateProviderExecute(r ApiCreateProviderRequest) (*
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
+type ApiCreateProviderPlatformRequest struct {
+	ctx                    context.Context
+	ApiService             *DefaultApiService
+	organization           string
+	name                   string
+	version                string
+	createProviderPlatform *CreateProviderPlatform
+}
+
+func (r ApiCreateProviderPlatformRequest) CreateProviderPlatform(createProviderPlatform CreateProviderPlatform) ApiCreateProviderPlatformRequest {
+	r.createProviderPlatform = &createProviderPlatform
+	return r
+}
+
+func (r ApiCreateProviderPlatformRequest) Execute() (*ProviderPlatformResponse, *http.Response, error) {
+	return r.ApiService.CreateProviderPlatformExecute(r)
+}
+
+/*
+CreateProviderPlatform Method for CreateProviderPlatform
+
+ @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @param organization
+ @param name
+ @param version
+ @return ApiCreateProviderPlatformRequest
+*/
+func (a *DefaultApiService) CreateProviderPlatform(ctx context.Context, organization string, name string, version string) ApiCreateProviderPlatformRequest {
+	return ApiCreateProviderPlatformRequest{
+		ApiService:   a,
+		ctx:          ctx,
+		organization: organization,
+		name:         name,
+		version:      version,
+	}
+}
+
+// Execute executes the request
+//  @return ProviderPlatformResponse
+func (a *DefaultApiService) CreateProviderPlatformExecute(r ApiCreateProviderPlatformRequest) (*ProviderPlatformResponse, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *ProviderPlatformResponse
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.CreateProviderPlatform")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms"
+	localVarPath = strings.Replace(localVarPath, "{"+"organization"+"}", url.PathEscape(parameterToString(r.organization, "")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"name"+"}", url.PathEscape(parameterToString(r.name, "")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"version"+"}", url.PathEscape(parameterToString(r.version, "")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.createProviderPlatform == nil {
+		return localVarReturnValue, nil, reportError("createProviderPlatform is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/vnd.api+json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/vnd.api+json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.createProviderPlatform
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
 type ApiCreateProviderVersionRequest struct {
 	ctx                           context.Context
 	ApiService                    *DefaultApiService
@@ -326,6 +446,123 @@ func (a *DefaultApiService) CreateProviderVersionExecute(r ApiCreateProviderVers
 	}
 	// body params
 	localVarPostBody = r.createRegistryProviderVersion
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiGetProviderPlatformRequest struct {
+	ctx          context.Context
+	ApiService   *DefaultApiService
+	organization string
+	name         string
+	version      string
+	os           string
+	arch         string
+}
+
+func (r ApiGetProviderPlatformRequest) Execute() (*ProviderPlatformResponse, *http.Response, error) {
+	return r.ApiService.GetProviderPlatformExecute(r)
+}
+
+/*
+GetProviderPlatform Method for GetProviderPlatform
+
+ @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+ @param organization
+ @param name
+ @param version
+ @param os
+ @param arch
+ @return ApiGetProviderPlatformRequest
+*/
+func (a *DefaultApiService) GetProviderPlatform(ctx context.Context, organization string, name string, version string, os string, arch string) ApiGetProviderPlatformRequest {
+	return ApiGetProviderPlatformRequest{
+		ApiService:   a,
+		ctx:          ctx,
+		organization: organization,
+		name:         name,
+		version:      version,
+		os:           os,
+		arch:         arch,
+	}
+}
+
+// Execute executes the request
+//  @return ProviderPlatformResponse
+func (a *DefaultApiService) GetProviderPlatformExecute(r ApiGetProviderPlatformRequest) (*ProviderPlatformResponse, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *ProviderPlatformResponse
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.GetProviderPlatform")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms/{os}/{arch}"
+	localVarPath = strings.Replace(localVarPath, "{"+"organization"+"}", url.PathEscape(parameterToString(r.organization, "")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"name"+"}", url.PathEscape(parameterToString(r.name, "")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"version"+"}", url.PathEscape(parameterToString(r.version, "")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"os"+"}", url.PathEscape(parameterToString(r.os, "")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"arch"+"}", url.PathEscape(parameterToString(r.arch, "")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/vnd.api+json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err

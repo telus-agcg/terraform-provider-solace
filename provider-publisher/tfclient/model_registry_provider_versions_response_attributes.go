@@ -16,14 +16,14 @@ import (
 
 // RegistryProviderVersionsResponseAttributes struct for RegistryProviderVersionsResponseAttributes
 type RegistryProviderVersionsResponseAttributes struct {
-	Version            *string                                                `json:"version,omitempty"`
-	CreatedAt          *string                                                `json:"created-at,omitempty"`
-	UpdatedAt          *string                                                `json:"updated-at,omitempty"`
-	KeyId              *string                                                `json:"key-id,omitempty"`
-	RegistryName       *string                                                `json:"registry-name,omitempty"`
-	Permissions        *RegistryProviderVersionsResponseAttributesPermissions `json:"permissions,omitempty"`
-	ShasumsUploaded    *bool                                                  `json:"shasums-uploaded,omitempty"`
-	ShasumsSigUploaded *bool                                                  `json:"shasums-sig-uploaded,omitempty"`
+	Version            *string      `json:"version,omitempty"`
+	CreatedAt          *string      `json:"created-at,omitempty"`
+	UpdatedAt          *string      `json:"updated-at,omitempty"`
+	KeyId              *string      `json:"key-id,omitempty"`
+	Protocols          []string     `json:"protocols,omitempty"`
+	Permissions        *Permissions `json:"permissions,omitempty"`
+	ShasumsUploaded    *bool        `json:"shasums-uploaded,omitempty"`
+	ShasumsSigUploaded *bool        `json:"shasums-sig-uploaded,omitempty"`
 }
 
 // NewRegistryProviderVersionsResponseAttributes instantiates a new RegistryProviderVersionsResponseAttributes object
@@ -171,42 +171,42 @@ func (o *RegistryProviderVersionsResponseAttributes) SetKeyId(v string) {
 	o.KeyId = &v
 }
 
-// GetRegistryName returns the RegistryName field value if set, zero value otherwise.
-func (o *RegistryProviderVersionsResponseAttributes) GetRegistryName() string {
-	if o == nil || o.RegistryName == nil {
-		var ret string
+// GetProtocols returns the Protocols field value if set, zero value otherwise.
+func (o *RegistryProviderVersionsResponseAttributes) GetProtocols() []string {
+	if o == nil || o.Protocols == nil {
+		var ret []string
 		return ret
 	}
-	return *o.RegistryName
+	return o.Protocols
 }
 
-// GetRegistryNameOk returns a tuple with the RegistryName field value if set, nil otherwise
+// GetProtocolsOk returns a tuple with the Protocols field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RegistryProviderVersionsResponseAttributes) GetRegistryNameOk() (*string, bool) {
-	if o == nil || o.RegistryName == nil {
+func (o *RegistryProviderVersionsResponseAttributes) GetProtocolsOk() ([]string, bool) {
+	if o == nil || o.Protocols == nil {
 		return nil, false
 	}
-	return o.RegistryName, true
+	return o.Protocols, true
 }
 
-// HasRegistryName returns a boolean if a field has been set.
-func (o *RegistryProviderVersionsResponseAttributes) HasRegistryName() bool {
-	if o != nil && o.RegistryName != nil {
+// HasProtocols returns a boolean if a field has been set.
+func (o *RegistryProviderVersionsResponseAttributes) HasProtocols() bool {
+	if o != nil && o.Protocols != nil {
 		return true
 	}
 
 	return false
 }
 
-// SetRegistryName gets a reference to the given string and assigns it to the RegistryName field.
-func (o *RegistryProviderVersionsResponseAttributes) SetRegistryName(v string) {
-	o.RegistryName = &v
+// SetProtocols gets a reference to the given []string and assigns it to the Protocols field.
+func (o *RegistryProviderVersionsResponseAttributes) SetProtocols(v []string) {
+	o.Protocols = v
 }
 
 // GetPermissions returns the Permissions field value if set, zero value otherwise.
-func (o *RegistryProviderVersionsResponseAttributes) GetPermissions() RegistryProviderVersionsResponseAttributesPermissions {
+func (o *RegistryProviderVersionsResponseAttributes) GetPermissions() Permissions {
 	if o == nil || o.Permissions == nil {
-		var ret RegistryProviderVersionsResponseAttributesPermissions
+		var ret Permissions
 		return ret
 	}
 	return *o.Permissions
@@ -214,7 +214,7 @@ func (o *RegistryProviderVersionsResponseAttributes) GetPermissions() RegistryPr
 
 // GetPermissionsOk returns a tuple with the Permissions field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RegistryProviderVersionsResponseAttributes) GetPermissionsOk() (*RegistryProviderVersionsResponseAttributesPermissions, bool) {
+func (o *RegistryProviderVersionsResponseAttributes) GetPermissionsOk() (*Permissions, bool) {
 	if o == nil || o.Permissions == nil {
 		return nil, false
 	}
@@ -230,8 +230,8 @@ func (o *RegistryProviderVersionsResponseAttributes) HasPermissions() bool {
 	return false
 }
 
-// SetPermissions gets a reference to the given RegistryProviderVersionsResponseAttributesPermissions and assigns it to the Permissions field.
-func (o *RegistryProviderVersionsResponseAttributes) SetPermissions(v RegistryProviderVersionsResponseAttributesPermissions) {
+// SetPermissions gets a reference to the given Permissions and assigns it to the Permissions field.
+func (o *RegistryProviderVersionsResponseAttributes) SetPermissions(v Permissions) {
 	o.Permissions = &v
 }
 
@@ -313,8 +313,8 @@ func (o RegistryProviderVersionsResponseAttributes) MarshalJSON() ([]byte, error
 	if o.KeyId != nil {
 		toSerialize["key-id"] = o.KeyId
 	}
-	if o.RegistryName != nil {
-		toSerialize["registry-name"] = o.RegistryName
+	if o.Protocols != nil {
+		toSerialize["protocols"] = o.Protocols
 	}
 	if o.Permissions != nil {
 		toSerialize["permissions"] = o.Permissions

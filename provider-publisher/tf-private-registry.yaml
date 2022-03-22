@@ -83,7 +83,50 @@ paths:
             application/vnd.api+json:
               schema:
                 $ref: '#/components/schemas/create-registry-provider-version-response'
-          
+  /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms:
+    parameters:
+        - $ref: '#/components/parameters/organization'
+        - $ref: '#/components/parameters/name'
+        - $ref: '#/components/parameters/version'
+    post:
+      operationId: CreateProviderPlatform
+      requestBody:
+        required: true
+        content:
+          application/vnd.api+json:
+            schema:
+              $ref: '#/components/schemas/create-provider-platform'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/provider-platform-response'
+  /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms/{os}/{arch}:
+    parameters:
+        - $ref: '#/components/parameters/organization'
+        - $ref: '#/components/parameters/name'
+        - $ref: '#/components/parameters/version'
+        - name: os
+          in: path
+          schema:
+            type: string
+          required: true
+        - name: arch
+          in: path
+          schema:
+            type: string
+          required: true
+    get:
+      operationId: GetProviderPlatform
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/provider-platform-response'
 
 components:
   securitySchemes:
@@ -213,13 +256,10 @@ components:
                   updated-at:
                     type: string
                     format: timestamp
-                  registry-name:
-                    type: string
+                  protocols:
+                    $ref: '#/components/schemas/protocols'
                   permissions:
-                    type: object
-                    properties:
-                      can-delete:
-                        type: boolean
+                    $ref: '#/components/schemas/permissions'
     registry-provider-versions-response:
       type: object
       properties:
@@ -247,15 +287,10 @@ components:
                     format: timestamp
                   key-id:
                     type: string
-                  registry-name:
-                    type: string
+                  protocols:
+                    $ref: '#/components/schemas/protocols'
                   permissions:
-                    type: object
-                    properties:
-                      can-delete:
-                        type: boolean    
-                      can-upload-asset:
-                        type: boolean
+                    $ref: '#/components/schemas/permissions'
                   shasums-uploaded:
                     type: boolean
                   shasums-sig-uploaded:
@@ -278,9 +313,7 @@ components:
                 key-id: 
                   type: string
                 protocols:
-                  type: array
-                  items:
-                    type: string
+                  $ref: '#/components/schemas/protocols'
               required:
                 - version
                 - key-id
@@ -294,49 +327,117 @@ components:
       type: object
       properties:
         data:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-              type:
-                type: string
-                enum:
-                  - registry-provider-versions
-              attributes:
-                type: object
-                properties:
-                  version:
-                    type: string
-                  created-at:
-                    type: string
-                    format: timestamp
-                  updated-at:
-                    type: string
-                    format: timestamp
-                  key-id:
-                    type: string
-                  registry-name:
-                    type: string
-                  permissions:
-                    type: object
-                    properties:
-                      can-delete:
-                        type: boolean    
-                      can-upload-asset:
-                        type: boolean
-                  shasums-uploaded:
-                    type: boolean
-                  shasums-sig-uploaded:
-                    type: boolean
-        links:
           type: object
           properties:
-            shasums-upload:
+            id:
               type: string
-            shasums-sig-upload:
+            type:
               type: string
+              enum:
+                - registry-provider-versions
+            attributes:
+              type: object
+              properties:
+                version:
+                  type: string
+                created-at:
+                  type: string
+                  format: timestamp
+                updated-at:
+                  type: string
+                  format: timestamp
+                key-id:
+                  type: string
+                protocols:
+                  $ref: '#/components/schemas/protocols'
+                permissions:
+                  $ref: '#/components/schemas/permissions'
+                shasums-uploaded:
+                  type: boolean
+                shasums-sig-uploaded:
+                  type: boolean
+            links:
+              type: object
+              properties:
+                shasums-upload:
+                  type: string
+                shasums-sig-upload:
+                  type: string
+    create-provider-platform:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - registry-provider-version-platforms
+            attributes:
+              type: object
+              properties:
+                os:
+                  type: string
+                arch:
+                  type: string
+                filename:
+                  type: string
+                shasum:
+                  type: string
+              required:
+                - os
+                - arch
+                - filename
+                - shasum
+          required:
+            - type
+            - attributes
+    provider-platform-response:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+              enum:
+                - registry-provider-platforms
+            attributes:
+              type: object
+              properties:
+                os:
+                  type: string
+                arch:
+                  type: string
+                filename:
+                  type: string
+                shasum:
+                  type: string
+                permissions:
+                  $ref: '#/components/schemas/permissions'
+                provider-binary-uploaded:
+                  type: boolean
+            links:
+              type: object
+              properties:
+                provider-binary-upload:
+                  type: string
+                provider-binary-download:
+                  type: string
+    protocols:
+      type: array
+      items:
+        type: string
+    permissions:
+      type: object
+      properties:
+        can-delete:
+          type: boolean
+        can-upload-asset:
+          type: boolean
+        
 
   parameters:
     organization:
@@ -347,6 +448,12 @@ components:
         type: string
     name:
       name: name
+      in: path
+      required: true
+      schema:
+        type: string
+    version:
+      name: version
       in: path
       required: true
       schema:

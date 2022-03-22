@@ -14,31 +14,31 @@ import (
 	"encoding/json"
 )
 
-// CreateRegistryProviderVersionResponseLinks struct for CreateRegistryProviderVersionResponseLinks
-type CreateRegistryProviderVersionResponseLinks struct {
+// CreateRegistryProviderVersionResponseDataLinks struct for CreateRegistryProviderVersionResponseDataLinks
+type CreateRegistryProviderVersionResponseDataLinks struct {
 	ShasumsUpload    *string `json:"shasums-upload,omitempty"`
 	ShasumsSigUpload *string `json:"shasums-sig-upload,omitempty"`
 }
 
-// NewCreateRegistryProviderVersionResponseLinks instantiates a new CreateRegistryProviderVersionResponseLinks object
+// NewCreateRegistryProviderVersionResponseDataLinks instantiates a new CreateRegistryProviderVersionResponseDataLinks object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewCreateRegistryProviderVersionResponseLinks() *CreateRegistryProviderVersionResponseLinks {
-	this := CreateRegistryProviderVersionResponseLinks{}
+func NewCreateRegistryProviderVersionResponseDataLinks() *CreateRegistryProviderVersionResponseDataLinks {
+	this := CreateRegistryProviderVersionResponseDataLinks{}
 	return &this
 }
 
-// NewCreateRegistryProviderVersionResponseLinksWithDefaults instantiates a new CreateRegistryProviderVersionResponseLinks object
+// NewCreateRegistryProviderVersionResponseDataLinksWithDefaults instantiates a new CreateRegistryProviderVersionResponseDataLinks object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewCreateRegistryProviderVersionResponseLinksWithDefaults() *CreateRegistryProviderVersionResponseLinks {
-	this := CreateRegistryProviderVersionResponseLinks{}
+func NewCreateRegistryProviderVersionResponseDataLinksWithDefaults() *CreateRegistryProviderVersionResponseDataLinks {
+	this := CreateRegistryProviderVersionResponseDataLinks{}
 	return &this
 }
 
 // GetShasumsUpload returns the ShasumsUpload field value if set, zero value otherwise.
-func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsUpload() string {
+func (o *CreateRegistryProviderVersionResponseDataLinks) GetShasumsUpload() string {
 	if o == nil || o.ShasumsUpload == nil {
 		var ret string
 		return ret
@@ -48,7 +48,7 @@ func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsUpload() string {
 
 // GetShasumsUploadOk returns a tuple with the ShasumsUpload field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsUploadOk() (*string, bool) {
+func (o *CreateRegistryProviderVersionResponseDataLinks) GetShasumsUploadOk() (*string, bool) {
 	if o == nil || o.ShasumsUpload == nil {
 		return nil, false
 	}
@@ -56,7 +56,7 @@ func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsUploadOk() (*stri
 }
 
 // HasShasumsUpload returns a boolean if a field has been set.
-func (o *CreateRegistryProviderVersionResponseLinks) HasShasumsUpload() bool {
+func (o *CreateRegistryProviderVersionResponseDataLinks) HasShasumsUpload() bool {
 	if o != nil && o.ShasumsUpload != nil {
 		return true
 	}
@@ -65,12 +65,12 @@ func (o *CreateRegistryProviderVersionResponseLinks) HasShasumsUpload() bool {
 }
 
 // SetShasumsUpload gets a reference to the given string and assigns it to the ShasumsUpload field.
-func (o *CreateRegistryProviderVersionResponseLinks) SetShasumsUpload(v string) {
+func (o *CreateRegistryProviderVersionResponseDataLinks) SetShasumsUpload(v string) {
 	o.ShasumsUpload = &v
 }
 
 // GetShasumsSigUpload returns the ShasumsSigUpload field value if set, zero value otherwise.
-func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsSigUpload() string {
+func (o *CreateRegistryProviderVersionResponseDataLinks) GetShasumsSigUpload() string {
 	if o == nil || o.ShasumsSigUpload == nil {
 		var ret string
 		return ret
@@ -80,7 +80,7 @@ func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsSigUpload() strin
 
 // GetShasumsSigUploadOk returns a tuple with the ShasumsSigUpload field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsSigUploadOk() (*string, bool) {
+func (o *CreateRegistryProviderVersionResponseDataLinks) GetShasumsSigUploadOk() (*string, bool) {
 	if o == nil || o.ShasumsSigUpload == nil {
 		return nil, false
 	}
@@ -88,7 +88,7 @@ func (o *CreateRegistryProviderVersionResponseLinks) GetShasumsSigUploadOk() (*s
 }
 
 // HasShasumsSigUpload returns a boolean if a field has been set.
-func (o *CreateRegistryProviderVersionResponseLinks) HasShasumsSigUpload() bool {
+func (o *CreateRegistryProviderVersionResponseDataLinks) HasShasumsSigUpload() bool {
 	if o != nil && o.ShasumsSigUpload != nil {
 		return true
 	}
@@ -97,11 +97,11 @@ func (o *CreateRegistryProviderVersionResponseLinks) HasShasumsSigUpload() bool 
 }
 
 // SetShasumsSigUpload gets a reference to the given string and assigns it to the ShasumsSigUpload field.
-func (o *CreateRegistryProviderVersionResponseLinks) SetShasumsSigUpload(v string) {
+func (o *CreateRegistryProviderVersionResponseDataLinks) SetShasumsSigUpload(v string) {
 	o.ShasumsSigUpload = &v
 }
 
-func (o CreateRegistryProviderVersionResponseLinks) MarshalJSON() ([]byte, error) {
+func (o CreateRegistryProviderVersionResponseDataLinks) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.ShasumsUpload != nil {
 		toSerialize["shasums-upload"] = o.ShasumsUpload
@@ -112,38 +112,38 @@ func (o CreateRegistryProviderVersionResponseLinks) MarshalJSON() ([]byte, error
 	return json.Marshal(toSerialize)
 }
 
-type NullableCreateRegistryProviderVersionResponseLinks struct {
-	value *CreateRegistryProviderVersionResponseLinks
+type NullableCreateRegistryProviderVersionResponseDataLinks struct {
+	value *CreateRegistryProviderVersionResponseDataLinks
 	isSet bool
 }
 
-func (v NullableCreateRegistryProviderVersionResponseLinks) Get() *CreateRegistryProviderVersionResponseLinks {
+func (v NullableCreateRegistryProviderVersionResponseDataLinks) Get() *CreateRegistryProviderVersionResponseDataLinks {
 	return v.value
 }
 
-func (v *NullableCreateRegistryProviderVersionResponseLinks) Set(val *CreateRegistryProviderVersionResponseLinks) {
+func (v *NullableCreateRegistryProviderVersionResponseDataLinks) Set(val *CreateRegistryProviderVersionResponseDataLinks) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableCreateRegistryProviderVersionResponseLinks) IsSet() bool {
+func (v NullableCreateRegistryProviderVersionResponseDataLinks) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableCreateRegistryProviderVersionResponseLinks) Unset() {
+func (v *NullableCreateRegistryProviderVersionResponseDataLinks) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableCreateRegistryProviderVersionResponseLinks(val *CreateRegistryProviderVersionResponseLinks) *NullableCreateRegistryProviderVersionResponseLinks {
-	return &NullableCreateRegistryProviderVersionResponseLinks{value: val, isSet: true}
+func NewNullableCreateRegistryProviderVersionResponseDataLinks(val *CreateRegistryProviderVersionResponseDataLinks) *NullableCreateRegistryProviderVersionResponseDataLinks {
+	return &NullableCreateRegistryProviderVersionResponseDataLinks{value: val, isSet: true}
 }
 
-func (v NullableCreateRegistryProviderVersionResponseLinks) MarshalJSON() ([]byte, error) {
+func (v NullableCreateRegistryProviderVersionResponseDataLinks) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableCreateRegistryProviderVersionResponseLinks) UnmarshalJSON(src []byte) error {
+func (v *NullableCreateRegistryProviderVersionResponseDataLinks) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }

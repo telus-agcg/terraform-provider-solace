@@ -16,8 +16,7 @@ import (
 
 // CreateRegistryProviderVersionResponse struct for CreateRegistryProviderVersionResponse
 type CreateRegistryProviderVersionResponse struct {
-	Data  []RegistryProviderVersionsResponseData      `json:"data,omitempty"`
-	Links *CreateRegistryProviderVersionResponseLinks `json:"links,omitempty"`
+	Data *CreateRegistryProviderVersionResponseData `json:"data,omitempty"`
 }
 
 // NewCreateRegistryProviderVersionResponse instantiates a new CreateRegistryProviderVersionResponse object
@@ -38,17 +37,17 @@ func NewCreateRegistryProviderVersionResponseWithDefaults() *CreateRegistryProvi
 }
 
 // GetData returns the Data field value if set, zero value otherwise.
-func (o *CreateRegistryProviderVersionResponse) GetData() []RegistryProviderVersionsResponseData {
+func (o *CreateRegistryProviderVersionResponse) GetData() CreateRegistryProviderVersionResponseData {
 	if o == nil || o.Data == nil {
-		var ret []RegistryProviderVersionsResponseData
+		var ret CreateRegistryProviderVersionResponseData
 		return ret
 	}
-	return o.Data
+	return *o.Data
 }
 
 // GetDataOk returns a tuple with the Data field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *CreateRegistryProviderVersionResponse) GetDataOk() ([]RegistryProviderVersionsResponseData, bool) {
+func (o *CreateRegistryProviderVersionResponse) GetDataOk() (*CreateRegistryProviderVersionResponseData, bool) {
 	if o == nil || o.Data == nil {
 		return nil, false
 	}
@@ -64,50 +63,15 @@ func (o *CreateRegistryProviderVersionResponse) HasData() bool {
 	return false
 }
 
-// SetData gets a reference to the given []RegistryProviderVersionsResponseData and assigns it to the Data field.
-func (o *CreateRegistryProviderVersionResponse) SetData(v []RegistryProviderVersionsResponseData) {
-	o.Data = v
-}
-
-// GetLinks returns the Links field value if set, zero value otherwise.
-func (o *CreateRegistryProviderVersionResponse) GetLinks() CreateRegistryProviderVersionResponseLinks {
-	if o == nil || o.Links == nil {
-		var ret CreateRegistryProviderVersionResponseLinks
-		return ret
-	}
-	return *o.Links
-}
-
-// GetLinksOk returns a tuple with the Links field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *CreateRegistryProviderVersionResponse) GetLinksOk() (*CreateRegistryProviderVersionResponseLinks, bool) {
-	if o == nil || o.Links == nil {
-		return nil, false
-	}
-	return o.Links, true
-}
-
-// HasLinks returns a boolean if a field has been set.
-func (o *CreateRegistryProviderVersionResponse) HasLinks() bool {
-	if o != nil && o.Links != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetLinks gets a reference to the given CreateRegistryProviderVersionResponseLinks and assigns it to the Links field.
-func (o *CreateRegistryProviderVersionResponse) SetLinks(v CreateRegistryProviderVersionResponseLinks) {
-	o.Links = &v
+// SetData gets a reference to the given CreateRegistryProviderVersionResponseData and assigns it to the Data field.
+func (o *CreateRegistryProviderVersionResponse) SetData(v CreateRegistryProviderVersionResponseData) {
+	o.Data = &v
 }
 
 func (o CreateRegistryProviderVersionResponse) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Data != nil {
 		toSerialize["data"] = o.Data
-	}
-	if o.Links != nil {
-		toSerialize["links"] = o.Links
 	}
 	return json.Marshal(toSerialize)
 }

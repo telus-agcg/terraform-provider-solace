@@ -16,7 +16,7 @@ import (
 
 // RegistryProvidersResponse struct for RegistryProvidersResponse
 type RegistryProvidersResponse struct {
-	Data []CreateRegistryProviderResponseData `json:"data,omitempty"`
+	Data []RegistryProvidersResponseData `json:"data,omitempty"`
 }
 
 // NewRegistryProvidersResponse instantiates a new RegistryProvidersResponse object
@@ -37,9 +37,9 @@ func NewRegistryProvidersResponseWithDefaults() *RegistryProvidersResponse {
 }
 
 // GetData returns the Data field value if set, zero value otherwise.
-func (o *RegistryProvidersResponse) GetData() []CreateRegistryProviderResponseData {
+func (o *RegistryProvidersResponse) GetData() []RegistryProvidersResponseData {
 	if o == nil || o.Data == nil {
-		var ret []CreateRegistryProviderResponseData
+		var ret []RegistryProvidersResponseData
 		return ret
 	}
 	return o.Data
@@ -47,7 +47,7 @@ func (o *RegistryProvidersResponse) GetData() []CreateRegistryProviderResponseDa
 
 // GetDataOk returns a tuple with the Data field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RegistryProvidersResponse) GetDataOk() ([]CreateRegistryProviderResponseData, bool) {
+func (o *RegistryProvidersResponse) GetDataOk() ([]RegistryProvidersResponseData, bool) {
 	if o == nil || o.Data == nil {
 		return nil, false
 	}
@@ -63,8 +63,8 @@ func (o *RegistryProvidersResponse) HasData() bool {
 	return false
 }
 
-// SetData gets a reference to the given []CreateRegistryProviderResponseData and assigns it to the Data field.
-func (o *RegistryProvidersResponse) SetData(v []CreateRegistryProviderResponseData) {
+// SetData gets a reference to the given []RegistryProvidersResponseData and assigns it to the Data field.
+func (o *RegistryProvidersResponse) SetData(v []RegistryProvidersResponseData) {
 	o.Data = v
 }
 
