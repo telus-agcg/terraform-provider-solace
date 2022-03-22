@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"net/http"
+	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -49,9 +50,29 @@ func (r clientUsernameResource) Read(data *MsgVpnClientUsername, diag *diag.Diag
 	return httpResponse, err
 }
 
-func (r clientUsernameResource) Update(data *MsgVpnClientUsername, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.ClientUsernameApi.UpdateMsgVpnClientUsername(r.Context, *data.MsgVpnName, *data.ClientUsername).Body(data.ToApi())
-	_, httpResponse, err := apiReq.Execute()
+func (r clientUsernameResource) Update(cur *MsgVpnClientUsername, pln *MsgVpnClientUsername, diag *diag.Diagnostics) (*http.Response, error) {
+	requiresShutdown := false
+	HasChanged(cur.ClientProfileName, pln.ClientProfileName, &requiresShutdown)
+	HasChanged(cur.AclProfileName, pln.AclProfileName, &requiresShutdown)
+
+	apiPlan := pln.ToApi()
+	if requiresShutdown {
+		apiPlan.Enabled = sempv2.PtrBool(false)
+	}
+
+	_, httpResponse, err := r.Client.ClientUsernameApi.
+		UpdateMsgVpnClientUsername(r.Context, *pln.MsgVpnName, *pln.ClientUsername).
+		Body(apiPlan).
+		Execute()
+
+	// If the client-username needed shut down before *and* the desired state
+	// is enabled, turn it back on
+	if err == nil && requiresShutdown && pln.Enabled != nil && *pln.Enabled {
+		body := sempv2.MsgVpnClientUsername{Enabled: sempv2.PtrBool(true)}
+		_, httpResponse, err = r.Client.ClientUsernameApi.UpdateMsgVpnClientUsername(
+			r.Context, *pln.MsgVpnName, *pln.ClientUsername).Body(body).Execute()
+	}
+
 	return httpResponse, err
 }
 

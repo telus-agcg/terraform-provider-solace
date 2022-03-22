@@ -49,7 +49,7 @@ func (r clientProfileResource) Read(data *MsgVpnClientProfile, diag *diag.Diagno
 	return httpResponse, err
 }
 
-func (r clientProfileResource) Update(data *MsgVpnClientProfile, diag *diag.Diagnostics) (*http.Response, error) {
+func (r clientProfileResource) Update(_ *MsgVpnClientProfile, data *MsgVpnClientProfile, diag *diag.Diagnostics) (*http.Response, error) {
 	apiReq := r.Client.ClientProfileApi.UpdateMsgVpnClientProfile(r.Context, *data.MsgVpnName, *data.ClientProfileName).Body(data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err

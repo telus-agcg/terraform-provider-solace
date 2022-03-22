@@ -16,11 +16,19 @@ type solaceProviderResource[Tdat any] interface {
 	// into it.
 	NewData() *Tdat
 
-	// Crea
+	// Create a new resource
 	Create(*Tdat, *diag.Diagnostics) (*http.Response, error)
+
+	// Read an existing resource
 	Read(*Tdat, *diag.Diagnostics) (*http.Response, error)
-	Update(*Tdat, *diag.Diagnostics) (*http.Response, error)
+
+	// Update an existing resource
+	Update(curState *Tdat, plnState *Tdat, diag *diag.Diagnostics) (*http.Response, error)
+
+	// Delete a resource
 	Delete(*Tdat, *diag.Diagnostics) (*http.Response, error)
+
+	// Import a resource
 	Import(*Tdat, *diag.Diagnostics)
 }
 
@@ -79,17 +87,18 @@ func (r resource[Tdat]) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 }
 
 func (r resource[Tdat]) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	data := r.DataFromCtx(ctx, &req.Plan, &resp.Diagnostics)
+	curState := r.DataFromCtx(ctx, &req.State, &resp.Diagnostics)
+	plnState := r.DataFromCtx(ctx, &req.Plan, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	_, err := r.spr.Update(data, &resp.Diagnostics)
+	_, err := r.spr.Update(curState, plnState, &resp.Diagnostics)
 	HandleSolaceApiError(err, &resp.Diagnostics)
 	if !resp.Diagnostics.HasError() {
 		// Update the data with the response from the API
-		r.DataToCtx(ctx, data, &resp.State, &resp.Diagnostics)
+		r.DataToCtx(ctx, plnState, &resp.State, &resp.Diagnostics)
 	}
 }
 

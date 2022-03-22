@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"net/http"
+	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -49,9 +50,35 @@ func (r queueResource) Read(data *MsgVpnQueue, diag *diag.Diagnostics) (*http.Re
 	return httpResponse, err
 }
 
-func (r queueResource) Update(data *MsgVpnQueue, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.QueueApi.UpdateMsgVpnQueue(r.Context, *data.MsgVpnName, *data.QueueName).Body(data.ToApi())
-	_, httpResponse, err := apiReq.Execute()
+func (r queueResource) Update(cur *MsgVpnQueue, pln *MsgVpnQueue, diag *diag.Diagnostics) (*http.Response, error) {
+	requiresShutdown := false
+	HasChanged(cur.AccessType, pln.AccessType, &requiresShutdown)
+	HasChanged(cur.Owner, pln.Owner, &requiresShutdown)
+	HasChanged(cur.Permission, pln.Permission, &requiresShutdown)
+	HasChanged(cur.RespectMsgPriorityEnabled, pln.RespectMsgPriorityEnabled, &requiresShutdown)
+
+	apiPlan := pln.ToApi()
+	if requiresShutdown {
+		apiPlan.IngressEnabled = sempv2.PtrBool(false)
+		apiPlan.EgressEnabled = sempv2.PtrBool(false)
+	}
+
+	_, httpResponse, err := r.Client.QueueApi.
+		UpdateMsgVpnQueue(r.Context, *pln.MsgVpnName, *pln.QueueName).
+		Body(apiPlan).
+		Execute()
+
+	// If the queue needed shut down before, set the enabled flags
+	// to the state required in the plan
+	if err == nil && requiresShutdown {
+		body := sempv2.MsgVpnQueue{
+			IngressEnabled: pln.IngressEnabled,
+			EgressEnabled:  pln.EgressEnabled,
+		}
+		_, httpResponse, err = r.Client.QueueApi.UpdateMsgVpnQueue(
+			r.Context, *pln.MsgVpnName, *pln.QueueName).Body(body).Execute()
+	}
+
 	return httpResponse, err
 }
 

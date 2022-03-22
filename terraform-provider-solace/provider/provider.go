@@ -3,8 +3,11 @@ package provider
 import (
 	"context"
 	"fmt"
+	"log"
 	"telusag/terraform-provider-solace/sempv2"
+	"telusag/terraform-provider-solace/util"
 
+	rt "github.com/go-openapi/runtime/client"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -22,7 +25,9 @@ type provider struct {
 type providerData struct {
 	Username types.String `tfsdk:"username"`
 	Password types.String `tfsdk:"password"`
+	Scheme   types.String `tfsdk:"scheme"`
 	Hostname types.String `tfsdk:"hostname"`
+	Insecure types.Bool   `tfsdk:"insecure"`
 	// DefaultMsgVpn types.String `tfsdk:"default_msgvpn"`
 }
 
@@ -49,9 +54,21 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	)
 
 	config := sempv2.NewConfiguration()
-	config.Scheme = "http"
+	if !data.Scheme.Null {
+		config.Scheme = data.Scheme.Value
+	}
 	config.Host = data.Hostname.Value
 	config.UserAgent = "Solace Terraform Provider"
+
+	if !data.Insecure.Null && data.Insecure.Value {
+		httpClient, err := rt.TLSClient(
+			rt.TLSClientOptions{InsecureSkipVerify: true})
+		if err != nil {
+			log.Fatal("Unable to create HTTPS client")
+		}
+		config.HTTPClient = httpClient
+	}
+
 	p.Client = *sempv2.NewAPIClient(config)
 
 	p.configured = true
@@ -61,9 +78,9 @@ func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceT
 	return map[string]tfsdk.ResourceType{
 		"solace_msgvpn":     msgVpnResourceType{},
 		"solace_aclprofile": aclProfileResourceType{},
-		// "solace_aclprofile_clientconnexception": aclProfileClientConnExceptionResourceType{},
-		// "solace_aclprofile_publishexception":    aclProfilePublishExceptionResourceType{},
-		// "solace_aclprofile_subscribeexception":  aclProfileSubscribeExceptionResourceType{},
+		//"solace_aclprofile_clientconnectexception": aclProfileClient,
+		//"solace_aclprofile_publishexception":    aclProfilePublishExceptionResourceType{},
+		//"solace_aclprofile_subscribeexception":  aclProfileSubscribeExceptionResourceType{},
 		"solace_clientprofile":  clientProfileResourceType{},
 		"solace_clientusername": clientUsernameResourceType{},
 		"solace_queue":          queueResourceType{},
@@ -88,10 +105,23 @@ func (p *provider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostic
 				Sensitive:   true,
 				Description: "Password",
 			},
+			"scheme": {
+				Type:        types.StringType,
+				Optional:    true,
+				Description: "URL scheme to use: http or https",
+				Validators: []tfsdk.AttributeValidator{
+					util.StringOneOfValidator("http", "https"),
+				},
+			},
 			"hostname": {
 				Type:        types.StringType,
 				Required:    true,
 				Description: "Hostname for the Solace Event Broker",
+			},
+			"insecure": {
+				Type:        types.BoolType,
+				Optional:    true,
+				Description: "Ignore HTTPS certificate errors",
 			},
 			// "default_msgvpn": {
 			// 	Type:        types.StringType,

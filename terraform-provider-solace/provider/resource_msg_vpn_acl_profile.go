@@ -49,7 +49,7 @@ func (r aclProfileResource) Read(data *MsgVpnAclProfile, diag *diag.Diagnostics)
 	return httpResponse, err
 }
 
-func (r aclProfileResource) Update(data *MsgVpnAclProfile, diag *diag.Diagnostics) (*http.Response, error) {
+func (r aclProfileResource) Update(_ *MsgVpnAclProfile, data *MsgVpnAclProfile, diag *diag.Diagnostics) (*http.Response, error) {
 	apiReq := r.Client.AclProfileApi.UpdateMsgVpnAclProfile(r.Context, *data.MsgVpnName, *data.AclProfileName).Body(data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err

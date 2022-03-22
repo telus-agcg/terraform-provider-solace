@@ -21,7 +21,7 @@ import (
 const org string = "telusagriculture"
 const tok string = "VL6OpSEGpgaSUg.atlasv1.FPF3fIrNcFMVAOk3EFnBQBsDxy0nXHMRJmAX9OJiVbjYUX9ZemhBDaFy7YDd2LCcy4U"
 const nam string = "solace"
-const ver string = "0.1.0"
+const ver string = "0.2.0"
 const key string = "14F5FEA3B2DA691F"
 
 var ctx context.Context

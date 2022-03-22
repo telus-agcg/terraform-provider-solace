@@ -49,7 +49,7 @@ func (r msgVpnResource) Read(data *MsgVpn, diag *diag.Diagnostics) (*http.Respon
 	return httpResponse, err
 }
 
-func (r msgVpnResource) Update(data *MsgVpn, diag *diag.Diagnostics) (*http.Response, error) {
+func (r msgVpnResource) Update(_ *MsgVpn, data *MsgVpn, diag *diag.Diagnostics) (*http.Response, error) {
 	apiReq := r.Client.MsgVpnApi.UpdateMsgVpn(r.Context, *data.MsgVpnName).Body(data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err

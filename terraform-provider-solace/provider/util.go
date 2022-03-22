@@ -20,6 +20,26 @@ type TFConfigSetter interface {
 	Set(ctx context.Context, target interface{}) diag.Diagnostics
 }
 
+// HasChanged is intended to use in a series of comparisons
+// to see whether one or more of a set of attributes have changed.
+// v1 is compared to v2 (a change from nil to non-nil or vice versa
+// is considered a change) if and only if 'changed' is not yet set
+// to true. If the input parameter 'changed' is already true, the
+// comparison between v1 and v2 will not be made
+func HasChanged[T comparable](v1 *T, v2 *T, changed *bool) {
+	if *changed {
+		return
+	}
+
+	if v1 == nil && v2 != nil {
+		*changed = true
+	} else if v1 != nil && v2 == nil {
+		*changed = true
+	} else if *v1 != *v2 {
+		*changed = true
+	}
+}
+
 const SempNotFound = "NOT_FOUND"
 
 func HandleSolaceApiWithIgnore(err error, diag *diag.Diagnostics, ignoreStatus ...string) {
@@ -48,10 +68,10 @@ func HandleSolaceApiErrorF(err error, f func(string, string), ignoreStatus []str
 				f("Solace API error", "SEMPv2 meta only response without error")
 			}
 		} else {
-			f("Solace API error", "SEMPv2 response without meta")
+			f("Solace API error", fmt.Sprintf("SEMPv2 response without meta: %s", string(sempErr.Body())))
 		}
 	} else {
-		f("Solace API error", fmt.Sprintf("Unexpected error type %q", reflect.TypeOf(err)))
+		f("Solace API error", fmt.Sprintf("Unexpected error type %q: %s", reflect.TypeOf(err), err.Error()))
 	}
 }
 
@@ -76,6 +96,8 @@ func toTFInt64(val *int64) types.Int64 {
 	}
 }
 
+// WithRequiredAttributes marks the specified attributes as required and
+// changing them will require replacement of the resource
 func WithRequiredAttributes(schema tfsdk.Schema, names []string) tfsdk.Schema {
 	for _, name := range names {
 		attr, ok := schema.Attributes[name]
