@@ -2,9 +2,7 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -29,7 +27,7 @@ type solaceProviderResource[Tdat any] interface {
 	Delete(*Tdat, *diag.Diagnostics) (*http.Response, error)
 
 	// Import a resource
-	Import(*Tdat, *diag.Diagnostics)
+	Import(string, *Tdat, *diag.Diagnostics)
 }
 
 var _ tfsdk.Resource = resource[struct{}]{}
@@ -117,18 +115,8 @@ func (r resource[Tdat]) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 }
 
 func (r resource[Tdat]) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	idParts := strings.Split(req.ID, "/")
-
-	if len(idParts) != 2 || idParts[0] == "" || idParts[1] == "" {
-		resp.Diagnostics.AddError(
-			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: msg-vpn/name. Got: %q", req.ID),
-		)
-		return
-	}
-
 	data := r.spr.NewData()
-	r.spr.Import(data, &resp.Diagnostics)
+	r.spr.Import(req.ID, data, &resp.Diagnostics)
 
 	r.DataToCtx(ctx, data, &resp.State, &resp.Diagnostics)
 }

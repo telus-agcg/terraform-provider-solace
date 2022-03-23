@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"net/http"
+	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -61,4 +62,14 @@ func (r msgVpnResource) Delete(data *MsgVpn, diag *diag.Diagnostics) (*http.Resp
 	return httpResponse, err
 }
 
-func (r msgVpnResource) Import(*MsgVpn, *diag.Diagnostics) {}
+var msgVpnImportRegexp *regexp.Regexp = regexp.MustCompile("^([^\\*\\?\\/]+)$")
+
+func (r msgVpnResource) Import(id string, data *MsgVpn, diag *diag.Diagnostics) {
+	match := msgVpnImportRegexp.FindStringSubmatch(id)
+	if match != nil {
+		data.MsgVpnName = &match[1]
+	} else {
+		diag.AddError("Expected <vpn-name>", id+" does not match "+msgVpnImportRegexp.String())
+		return
+	}
+}

@@ -27,6 +27,7 @@ func (tfData *EventThreshold) ToApi() *sempv2.EventThreshold {
 	if tfData == nil {
 		return nil
 	}
+
 	return &sempv2.EventThreshold{
 		ClearPercent: tfData.ClearPercent,
 		ClearValue:   tfData.ClearValue,

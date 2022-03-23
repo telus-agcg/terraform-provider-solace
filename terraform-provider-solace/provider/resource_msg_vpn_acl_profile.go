@@ -2,7 +2,9 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -61,4 +63,16 @@ func (r aclProfileResource) Delete(data *MsgVpnAclProfile, diag *diag.Diagnostic
 	return httpResponse, err
 }
 
-func (r aclProfileResource) Import(*MsgVpnAclProfile, *diag.Diagnostics) {}
+var msgVpnAclProfileImportRegexp *regexp.Regexp = regexp.MustCompile(fmt.Sprintf(
+	"^([^\\s%s]+)\\/([0-9a-zA-Z_\\-]+)$", regexp.QuoteMeta("*?/")))
+
+func (r aclProfileResource) Import(id string, data *MsgVpnAclProfile, diag *diag.Diagnostics) {
+	match := msgVpnAclProfileImportRegexp.FindStringSubmatch(id)
+	if match != nil {
+		data.MsgVpnName = &match[1]
+		data.AclProfileName = &match[2]
+	} else {
+		diag.AddError("Expected <vpn-name>/<acl-profile>", id+" does not match "+msgVpnAclProfileImportRegexp.String())
+		return
+	}
+}

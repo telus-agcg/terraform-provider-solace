@@ -2,7 +2,9 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"regexp"
 	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -82,4 +84,16 @@ func (r clientUsernameResource) Delete(data *MsgVpnClientUsername, diag *diag.Di
 	return httpResponse, err
 }
 
-func (r clientUsernameResource) Import(*MsgVpnClientUsername, *diag.Diagnostics) {}
+var msgVpnClientUsernameImportRegexp *regexp.Regexp = regexp.MustCompile(fmt.Sprintf(
+	"^([^\\s%s]+)\\/([^\\s%s]+)$", regexp.QuoteMeta("*?/"), regexp.QuoteMeta("*?")))
+
+func (r clientUsernameResource) Import(id string, data *MsgVpnClientUsername, diag *diag.Diagnostics) {
+	match := msgVpnClientUsernameImportRegexp.FindStringSubmatch(id)
+	if match != nil {
+		data.MsgVpnName = &match[1]
+		data.ClientUsername = &match[2]
+	} else {
+		diag.AddError("Expected <vpn-name>/<client-username>", id+" does not match "+msgVpnClientUsernameImportRegexp.String())
+		return
+	}
+}

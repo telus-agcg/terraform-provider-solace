@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"net/http"
+	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -66,5 +67,19 @@ func (r aclProfilePublishExceptionResource) Delete(data *MsgVpnAclProfilePublish
 	return httpResponse, err
 }
 
-func (r aclProfilePublishExceptionResource) Import(*MsgVpnAclProfilePublishException, *diag.Diagnostics) {
+var msgVpnAclProfilePublishExceptionImportRegexp *regexp.Regexp = regexp.MustCompile(
+	"^([^\\s\\*\\?\\/]+)\\/([0-9a-zA-Z_\\-]+)\\/(smf|mqtt)\\/([^\\s]+)$")
+
+func (r aclProfilePublishExceptionResource) Import(id string, data *MsgVpnAclProfilePublishException, diag *diag.Diagnostics) {
+	match := msgVpnAclProfilePublishExceptionImportRegexp.FindStringSubmatch(id)
+	if match != nil {
+		data.MsgVpnName = &match[1]
+		data.AclProfileName = &match[2]
+		data.TopicSyntax = &match[3]
+		data.PublishExceptionTopic = &match[4]
+	} else {
+		diag.AddError("Expected <vpn-name>/<acl-profile>/<topic syntax>/<topic name>",
+			id+" does not match "+msgVpnAclProfilePublishExceptionImportRegexp.String())
+		return
+	}
 }
