@@ -1,7 +1,7 @@
 /*
 SEMP (Solace Element Management Protocol)
 
-SEMP (starting in `v2`, see note 1) is a RESTful API for configuring, monitoring, and administering a Solace PubSub+ broker.  SEMP uses URIs to address manageable **resources** of the Solace PubSub+ broker. Resources are individual **objects**, **collections** of objects, or (exclusively in the action API) **actions**. This document applies to the following API:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Configuration|/SEMP/v2/config|Reading and writing config state|See note 2    The following APIs are also available:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Action|/SEMP/v2/action|Performing actions|See note 2 Monitoring|/SEMP/v2/monitor|Querying operational parameters|See note 2    Resources are always nouns, with individual objects being singular and collections being plural.  Objects within a collection are identified by an `obj-id`, which follows the collection name with the form `collection-name/obj-id`.  Actions within an object are identified by an `action-id`, which follows the object name with the form `obj-id/action-id`.  Some examples:  ``` /SEMP/v2/config/msgVpns                        ; MsgVpn collection /SEMP/v2/config/msgVpns/a                      ; MsgVpn object named \"a\" /SEMP/v2/config/msgVpns/a/queues               ; Queue collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues/b             ; Queue object named \"b\" in MsgVpn \"a\" /SEMP/v2/action/msgVpns/a/queues/b/startReplay ; Action that starts a replay on Queue \"b\" in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients             ; Client collection in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients/c           ; Client object named \"c\" in MsgVpn \"a\" ```  ## Collection Resources  Collections are unordered lists of objects (unless described as otherwise), and are described by JSON arrays. Each item in the array represents an object in the same manner as the individual object would normally be represented. In the configuration API, the creation of a new object is done through its collection resource.  ## Object and Action Resources  Objects are composed of attributes, actions, collections, and other objects. They are described by JSON objects as name/value pairs. The collections and actions of an object are not contained directly in the object's JSON content; rather the content includes an attribute containing a URI which points to the collections and actions. These contained resources must be managed through this URI. At a minimum, every object has one or more identifying attributes, and its own `uri` attribute which contains the URI pointing to itself.  Actions are also composed of attributes, and are described by JSON objects as name/value pairs. Unlike objects, however, they are not members of a collection and cannot be retrieved, only performed. Actions only exist in the action API.  Attributes in an object or action may have any combination of the following properties:   Property|Meaning|Comments :---|:---|:--- Identifying|Attribute is involved in unique identification of the object, and appears in its URI| Required|Attribute must be provided in the request| Read-Only|Attribute can only be read, not written.|See note 3 Write-Only|Attribute can only be written, not read, unless the attribute is also opaque|See the documentation for the opaque property Requires-Disable|Attribute can only be changed when object is disabled| Deprecated|Attribute is deprecated, and will disappear in the next SEMP version| Opaque|Attribute can be set or retrieved in opaque form when the `opaquePassword` query parameter is present|See the `opaquePassword` query parameter documentation    In some requests, certain attributes may only be provided in certain combinations with other attributes:   Relationship|Meaning :---|:--- Requires|Attribute may only be changed by a request if a particular attribute or combination of attributes is also provided in the request Conflicts|Attribute may only be provided in a request if a particular attribute or combination of attributes is not also provided in the request    In the monitoring API, any non-identifying attribute may not be returned in a GET.  ## HTTP Methods  The following HTTP methods manipulate resources in accordance with these general principles. Note that some methods are only used in certain APIs:   Method|Resource|Meaning|Request Body|Response Body|Missing Request Attributes :---|:---|:---|:---|:---|:--- POST|Collection|Create object|Initial attribute values|Object attributes and metadata|Set to default PUT|Object|Create or replace object (see note 5)|New attribute values|Object attributes and metadata|Set to default, with certain exceptions (see note 4) PUT|Action|Performs action|Action arguments|Action metadata|N/A PATCH|Object|Update object|New attribute values|Object attributes and metadata|unchanged DELETE|Object|Delete object|Empty|Object metadata|N/A GET|Object|Get object|Empty|Object attributes and metadata|N/A GET|Collection|Get collection|Empty|Object attributes and collection metadata|N/A    ## Common Query Parameters  The following are some common query parameters that are supported by many method/URI combinations. Individual URIs may document additional parameters. Note that multiple query parameters can be used together in a single URI, separated by the ampersand character. For example:  ``` ; Request for the MsgVpns collection using two hypothetical query parameters ; \"q1\" and \"q2\" with values \"val1\" and \"val2\" respectively /SEMP/v2/config/msgVpns?q1=val1&q2=val2 ```  ### select  Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. Use this query parameter to limit the size of the returned data for each returned object, return only those fields that are desired, or exclude fields that are not desired.  The value of `select` is a comma-separated list of attribute names. If the list contains attribute names that are not prefaced by `-`, only those attributes are included in the response. If the list contains attribute names that are prefaced by `-`, those attributes are excluded from the response. If the list contains both types, then the difference of the first set of attributes and the second set of attributes is returned. If the list is empty (i.e. `select=`), no attributes are returned.  All attributes that are prefaced by `-` must follow all attributes that are not prefaced by `-`. In addition, each attribute name in the list must match at least one attribute in the object.  Names may include the `*` wildcard (zero or more characters). Nested attribute names are supported using periods (e.g. `parentName.childName`).  Some examples:  ``` ; List of all MsgVpn names /SEMP/v2/config/msgVpns?select=msgVpnName ; List of all MsgVpn and their attributes except for their names /SEMP/v2/config/msgVpns?select=-msgVpnName ; Authentication attributes of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance?select=authentication* ; All attributes of MsgVpn \"finance\" except for authentication attributes /SEMP/v2/config/msgVpns/finance?select=-authentication* ; Access related attributes of Queue \"orderQ\" of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance/queues/orderQ?select=owner,permission ```  ### where  Include in the response only objects where certain conditions are true. Use this query parameter to limit which objects are returned to those whose attribute values meet the given conditions.  The value of `where` is a comma-separated list of expressions. All expressions must be true for the object to be included in the response. Each expression takes the form:  ``` expression  = attribute-name OP value OP          = '==' | '!=' | '&lt;' | '&gt;' | '&lt;=' | '&gt;=' ```  `value` may be a number, string, `true`, or `false`, as appropriate for the type of `attribute-name`. Greater-than and less-than comparisons only work for numbers. A `*` in a string `value` is interpreted as a wildcard (zero or more characters). Some examples:  ``` ; Only enabled MsgVpns /SEMP/v2/config/msgVpns?where=enabled==true ; Only MsgVpns using basic non-LDAP authentication /SEMP/v2/config/msgVpns?where=authenticationBasicEnabled==true,authenticationBasicType!=ldap ; Only MsgVpns that allow more than 100 client connections /SEMP/v2/config/msgVpns?where=maxConnectionCount>100 ; Only MsgVpns with msgVpnName starting with \"B\": /SEMP/v2/config/msgVpns?where=msgVpnName==B* ```  ### count  Limit the count of objects in the response. This can be useful to limit the size of the response for large collections. The minimum value for `count` is `1` and the default is `10`. There is also a per-collection maximum value to limit request handling time.  `count` does not guarantee that a minimum number of objects will be returned. A page may contain fewer than `count` objects or even be empty. Additional objects may nonetheless be available for retrieval on subsequent pages. See the `cursor` query parameter documentation for more information on paging.  For example: ``` ; Up to 25 MsgVpns /SEMP/v2/config/msgVpns?count=25 ```  ### cursor  The cursor, or position, for the next page of objects. Cursors are opaque data that should not be created or interpreted by SEMP clients, and should only be used as described below.  When a request is made for a collection and there may be additional objects available for retrieval that are not included in the initial response, the response will include a `cursorQuery` field containing a cursor. The value of this field can be specified in the `cursor` query parameter of a subsequent request to retrieve the next page of objects. For convenience, an appropriate URI is constructed automatically by the broker and included in the `nextPageUri` field of the response. This URI can be used directly to retrieve the next page of objects.  Applications must continue to follow the `nextPageUri` if one is provided in order to retrieve the full set of objects associated with the request, even if a page contains fewer than the requested number of objects (see the `count` query parameter documentation) or is empty.  ### opaquePassword  Attributes with the opaque property are also write-only and so cannot normally be retrieved in a GET. However, when a password is provided in the `opaquePassword` query parameter, attributes with the opaque property are retrieved in a GET in opaque form, encrypted with this password. The query parameter can also be used on a POST, PATCH, or PUT to set opaque attributes using opaque attribute values retrieved in a GET, so long as:  1. the same password that was used to retrieve the opaque attribute values is provided; and  2. the broker to which the request is being sent has the same major and minor SEMP version as the broker that produced the opaque attribute values.  The password provided in the query parameter must be a minimum of 8 characters and a maximum of 128 characters.  The query parameter can only be used in the configuration API, and only over HTTPS.  ## Authentication  When a client makes its first SEMPv2 request, it must supply a username and password using HTTP Basic authentication, or an OAuth token or tokens using HTTP Bearer authentication.  When HTTP Basic authentication is used, the broker returns a cookie containing a session key. The client can omit the username and password from subsequent requests, because the broker can use the session cookie for authentication instead. When the session expires or is deleted, the client must provide the username and password again, and the broker creates a new session.  There are a limited number of session slots available on the broker. The broker returns 529 No SEMP Session Available if it is not able to allocate a session.  If certain attributes—such as a user's password—are changed, the broker automatically deletes the affected sessions. These attributes are documented below. However, changes in external user configuration data stored on a RADIUS or LDAP server do not trigger the broker to delete the associated session(s), therefore you must do this manually, if required.  A client can retrieve its current session information using the /about/user endpoint and delete its own session using the /about/user/logout endpoint. A client with appropriate permissions can also manage all sessions using the /sessions endpoint.  Sessions are not created when authenticating with an OAuth token or tokens using HTTP Bearer authentication. If a session cookie is provided, it is ignored.  ## Help  Visit [our website](https://solace.com) to learn more about Solace.  You can also download the SEMP API specifications by clicking [here](https://solace.com/downloads/).  If you need additional support, please contact us at [support@solace.com](mailto:support@solace.com).  ## Notes  Note|Description :---:|:--- 1|This specification defines SEMP starting in \"v2\", and not the original SEMP \"v1\" interface. Request and response formats between \"v1\" and \"v2\" are entirely incompatible, although both protocols share a common port configuration on the Solace PubSub+ broker. They are differentiated by the initial portion of the URI path, one of either \"/SEMP/\" or \"/SEMP/v2/\" 2|This API is partially implemented. Only a subset of all objects are available. 3|Read-only attributes may appear in POST and PUT/PATCH requests. However, if a read-only attribute is not marked as identifying, it will be ignored during a PUT/PATCH. 4|On a PUT, if the SEMP user is not authorized to modify the attribute, its value is left unchanged rather than set to default. In addition, the values of write-only attributes are not set to their defaults on a PUT, except in the following two cases: there is a mutual requires relationship with another non-write-only attribute, both attributes are absent from the request, and the non-write-only attribute is not currently set to its default value; or the attribute is also opaque and the `opaquePassword` query parameter is provided in the request. 5|On a PUT, if the object does not exist, it is created first.  
+SEMP (starting in `v2`, see note 1) is a RESTful API for configuring, monitoring, and administering a Solace PubSub+ broker.  SEMP uses URIs to address manageable **resources** of the Solace PubSub+ broker. Resources are individual **objects**, **collections** of objects, or (exclusively in the action API) **actions**. This document applies to the following API:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Configuration|/SEMP/v2/config|Reading and writing config state|See note 2    The following APIs are also available:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Action|/SEMP/v2/action|Performing actions|See note 2 Monitoring|/SEMP/v2/monitor|Querying operational parameters|See note 2    Resources are always nouns, with individual objects being singular and collections being plural.  Objects within a collection are identified by an `obj-id`, which follows the collection name with the form `collection-name/obj-id`.  Actions within an object are identified by an `action-id`, which follows the object name with the form `obj-id/action-id`.  Some examples:  ``` /SEMP/v2/config/msgVpns                        ; MsgVpn collection /SEMP/v2/config/msgVpns/a                      ; MsgVpn object named \"a\" /SEMP/v2/config/msgVpns/a/queues               ; Queue collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues/b             ; Queue object named \"b\" in MsgVpn \"a\" /SEMP/v2/action/msgVpns/a/queues/b/startReplay ; Action that starts a replay on Queue \"b\" in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients             ; Client collection in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients/c           ; Client object named \"c\" in MsgVpn \"a\" ```  ## Collection Resources  Collections are unordered lists of objects (unless described as otherwise), and are described by JSON arrays. Each item in the array represents an object in the same manner as the individual object would normally be represented. In the configuration API, the creation of a new object is done through its collection resource.  ## Object and Action Resources  Objects are composed of attributes, actions, collections, and other objects. They are described by JSON objects as name/value pairs. The collections and actions of an object are not contained directly in the object's JSON content; rather the content includes an attribute containing a URI which points to the collections and actions. These contained resources must be managed through this URI. At a minimum, every object has one or more identifying attributes, and its own `uri` attribute which contains the URI pointing to itself.  Actions are also composed of attributes, and are described by JSON objects as name/value pairs. Unlike objects, however, they are not members of a collection and cannot be retrieved, only performed. Actions only exist in the action API.  Attributes in an object or action may have any combination of the following properties:   Property|Meaning|Comments :---|:---|:--- Identifying|Attribute is involved in unique identification of the object, and appears in its URI| Required|Attribute must be provided in the request| Read-Only|Attribute can only be read, not written.|See note 3 Write-Only|Attribute can only be written, not read, unless the attribute is also opaque|See the documentation for the opaque property Requires-Disable|Attribute can only be changed when object is disabled| Deprecated|Attribute is deprecated, and will disappear in the next SEMP version| Opaque|Attribute can be set or retrieved in opaque form when the `opaquePassword` query parameter is present|See the `opaquePassword` query parameter documentation    In some requests, certain attributes may only be provided in certain combinations with other attributes:   Relationship|Meaning :---|:--- Requires|Attribute may only be changed by a request if a particular attribute or combination of attributes is also provided in the request Conflicts|Attribute may only be provided in a request if a particular attribute or combination of attributes is not also provided in the request    In the monitoring API, any non-identifying attribute may not be returned in a GET.  ## HTTP Methods  The following HTTP methods manipulate resources in accordance with these general principles. Note that some methods are only used in certain APIs:   Method|Resource|Meaning|Request Body|Response Body|Missing Request Attributes :---|:---|:---|:---|:---|:--- POST|Collection|Create object|Initial attribute values|Object attributes and metadata|Set to default PUT|Object|Create or replace object (see note 5)|New attribute values|Object attributes and metadata|Set to default, with certain exceptions (see note 4) PUT|Action|Performs action|Action arguments|Action metadata|N/A PATCH|Object|Update object|New attribute values|Object attributes and metadata|unchanged DELETE|Object|Delete object|Empty|Object metadata|N/A GET|Object|Get object|Empty|Object attributes and metadata|N/A GET|Collection|Get collection|Empty|Object attributes and collection metadata|N/A    ## Common Query Parameters  The following are some common query parameters that are supported by many method/URI combinations. Individual URIs may document additional parameters. Note that multiple query parameters can be used together in a single URI, separated by the ampersand character. For example:  ``` ; Request for the MsgVpns collection using two hypothetical query parameters ; \"q1\" and \"q2\" with values \"val1\" and \"val2\" respectively /SEMP/v2/config/msgVpns?q1=val1&q2=val2 ```  ### select  Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. Use this query parameter to limit the size of the returned data for each returned object, return only those fields that are desired, or exclude fields that are not desired.  The value of `select` is a comma-separated list of attribute names. If the list contains attribute names that are not prefaced by `-`, only those attributes are included in the response. If the list contains attribute names that are prefaced by `-`, those attributes are excluded from the response. If the list contains both types, then the difference of the first set of attributes and the second set of attributes is returned. If the list is empty (i.e. `select=`), no attributes are returned.  All attributes that are prefaced by `-` must follow all attributes that are not prefaced by `-`. In addition, each attribute name in the list must match at least one attribute in the object.  Names may include the `*` wildcard (zero or more characters). Nested attribute names are supported using periods (e.g. `parentName.childName`).  Some examples:  ``` ; List of all MsgVpn names /SEMP/v2/config/msgVpns?select=msgVpnName ; List of all MsgVpn and their attributes except for their names /SEMP/v2/config/msgVpns?select=-msgVpnName ; Authentication attributes of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance?select=authentication* ; All attributes of MsgVpn \"finance\" except for authentication attributes /SEMP/v2/config/msgVpns/finance?select=-authentication* ; Access related attributes of Queue \"orderQ\" of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance/queues/orderQ?select=owner,permission ```  ### where  Include in the response only objects where certain conditions are true. Use this query parameter to limit which objects are returned to those whose attribute values meet the given conditions.  The value of `where` is a comma-separated list of expressions. All expressions must be true for the object to be included in the response. Each expression takes the form:  ``` expression  = attribute-name OP value OP          = '==' | '!=' | '&lt;' | '&gt;' | '&lt;=' | '&gt;=' ```  `value` may be a number, string, `true`, or `false`, as appropriate for the type of `attribute-name`. Greater-than and less-than comparisons only work for numbers. A `*` in a string `value` is interpreted as a wildcard (zero or more characters). Some examples:  ``` ; Only enabled MsgVpns /SEMP/v2/config/msgVpns?where=enabled==true ; Only MsgVpns using basic non-LDAP authentication /SEMP/v2/config/msgVpns?where=authenticationBasicEnabled==true,authenticationBasicType!=ldap ; Only MsgVpns that allow more than 100 client connections /SEMP/v2/config/msgVpns?where=maxConnectionCount>100 ; Only MsgVpns with msgVpnName starting with \"B\": /SEMP/v2/config/msgVpns?where=msgVpnName==B* ```  ### count  Limit the count of objects in the response. This can be useful to limit the size of the response for large collections. The minimum value for `count` is `1` and the default is `10`. There is also a per-collection maximum value to limit request handling time.  `count` does not guarantee that a minimum number of objects will be returned. A page may contain fewer than `count` objects or even be empty. Additional objects may nonetheless be available for retrieval on subsequent pages. See the `cursor` query parameter documentation for more information on paging.  For example: ``` ; Up to 25 MsgVpns /SEMP/v2/config/msgVpns?count=25 ```  ### cursor  The cursor, or position, for the next page of objects. Cursors are opaque data that should not be created or interpreted by SEMP clients, and should only be used as described below.  When a request is made for a collection and there may be additional objects available for retrieval that are not included in the initial response, the response will include a `cursorQuery` field containing a cursor. The value of this field can be specified in the `cursor` query parameter of a subsequent request to retrieve the next page of objects. For convenience, an appropriate URI is constructed automatically by the broker and included in the `nextPageUri` field of the response. This URI can be used directly to retrieve the next page of objects.  Applications must continue to follow the `nextPageUri` if one is provided in order to retrieve the full set of objects associated with the request, even if a page contains fewer than the requested number of objects (see the `count` query parameter documentation) or is empty.  ### opaquePassword  Attributes with the opaque property are also write-only and so cannot normally be retrieved in a GET. However, when a password is provided in the `opaquePassword` query parameter, attributes with the opaque property are retrieved in a GET in opaque form, encrypted with this password. The query parameter can also be used on a POST, PATCH, or PUT to set opaque attributes using opaque attribute values retrieved in a GET, so long as:  1. the same password that was used to retrieve the opaque attribute values is provided; and  2. the broker to which the request is being sent has the same major and minor SEMP version as the broker that produced the opaque attribute values.  The password provided in the query parameter must be a minimum of 8 characters and a maximum of 128 characters.  The query parameter can only be used in the configuration API, and only over HTTPS.  ## Authentication  When a client makes its first SEMPv2 request, it must supply a username and password using HTTP Basic authentication, or an OAuth token or tokens using HTTP Bearer authentication.  When HTTP Basic authentication is used, the broker returns a cookie containing a session key. The client can omit the username and password from subsequent requests, because the broker can use the session cookie for authentication instead. When the session expires or is deleted, the client must provide the username and password again, and the broker creates a new session.  There are a limited number of session slots available on the broker. The broker returns 529 No SEMP Session Available if it is not able to allocate a session.  If certain attributes—such as a user's password—are changed, the broker automatically deletes the affected sessions. These attributes are documented below. However, changes in external user configuration data stored on a RADIUS or LDAP server do not trigger the broker to delete the associated session(s), therefore you must do this manually, if required.  A client can retrieve its current session information using the /about/user endpoint and delete its own session using the /about/user/logout endpoint. A client with appropriate permissions can also manage all sessions using the /sessions endpoint.  Sessions are not created when authenticating with an OAuth token or tokens using HTTP Bearer authentication. If a session cookie is provided, it is ignored.  ## Help  Visit [our website](https://solace.com) to learn more about Solace.  You can also download the SEMP API specifications by clicking [here](https://solace.com/downloads/).  If you need additional support, please contact us at [support@solace.com](mailto:support@solace.com).  ## Notes  Note|Description :---:|:--- 1|This specification defines SEMP starting in \"v2\", and not the original SEMP \"v1\" interface. Request and response formats between \"v1\" and \"v2\" are entirely incompatible, although both protocols share a common port configuration on the Solace PubSub+ broker. They are differentiated by the initial portion of the URI path, one of either \"/SEMP/\" or \"/SEMP/v2/\" 2|This API is partially implemented. Only a subset of all objects are available. 3|Read-only attributes may appear in POST and PUT/PATCH requests. However, if a read-only attribute is not marked as identifying, it will be ignored during a PUT/PATCH. 4|On a PUT, if the SEMP user is not authorized to modify the attribute, its value is left unchanged rather than set to default. In addition, the values of write-only attributes are not set to their defaults on a PUT, except in the following two cases: there is a mutual requires relationship with another non-write-only attribute, both attributes are absent from the request, and the non-write-only attribute is not currently set to its default value; or the attribute is also opaque and the `opaquePassword` query parameter is provided in the request. 5|On a PUT, if the object does not exist, it is created first.
 
 API version: 2.26
 Contact: support@solace.com
@@ -29,11 +29,11 @@ var (
 type OauthProfileApiService service
 
 type OauthProfileApiApiCreateOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	body *OauthProfile
+	ctx            context.Context
+	ApiService     *OauthProfileApiService
+	body           *OauthProfile
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The OAuth Profile object&#39;s attributes.
@@ -41,11 +41,13 @@ func (r OauthProfileApiApiCreateOauthProfileRequest) Body(body OauthProfile) Oau
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileRequest {
 	r.select_ = &select_
@@ -81,7 +83,7 @@ This has been available since 2.24.
 func (a *OauthProfileApiService) CreateOauthProfile(ctx context.Context) OauthProfileApiApiCreateOauthProfileRequest {
 	return OauthProfileApiApiCreateOauthProfileRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
@@ -89,10 +91,10 @@ func (a *OauthProfileApiService) CreateOauthProfile(ctx context.Context) OauthPr
 //  @return OauthProfileResponse
 func (a *OauthProfileApiService) CreateOauthProfileExecute(r OauthProfileApiApiCreateOauthProfileRequest) (*OauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfile")
@@ -156,13 +158,13 @@ func (a *OauthProfileApiService) CreateOauthProfileExecute(r OauthProfileApiApiC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -179,12 +181,12 @@ func (a *OauthProfileApiService) CreateOauthProfileExecute(r OauthProfileApiApiC
 }
 
 type OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfileAccessLevelGroup
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfileAccessLevelGroup
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Group Access Level object&#39;s attributes.
@@ -192,11 +194,13 @@ func (r OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest) Body(body O
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest {
 	r.select_ = &select_
@@ -239,8 +243,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroup(ctx context.Context, oauthProfileName string) OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest {
 	return OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -249,10 +253,10 @@ func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroup(ctx context.
 //  @return OauthProfileAccessLevelGroupResponse
 func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupExecute(r OauthProfileApiApiCreateOauthProfileAccessLevelGroupRequest) (*OauthProfileAccessLevelGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfileAccessLevelGroup")
@@ -317,13 +321,13 @@ func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupExecute(r Oau
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -340,13 +344,13 @@ func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupExecute(r Oau
 }
 
 type OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	body *OauthProfileAccessLevelGroupMsgVpnAccessLevelException
-	opaquePassword *string
-	select_ *[]string
+	groupName        string
+	body             *OauthProfileAccessLevelGroupMsgVpnAccessLevelException
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Message VPN Access-Level Exception object&#39;s attributes.
@@ -354,11 +358,13 @@ func (r OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExc
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -396,10 +402,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, groupName string) OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
+		groupName:        groupName,
 	}
 }
 
@@ -407,10 +413,10 @@ func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupMsgVpnAccessL
 //  @return OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiCreateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) (*OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfileAccessLevelGroupMsgVpnAccessLevelException")
@@ -476,13 +482,13 @@ func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupMsgVpnAccessL
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -499,12 +505,12 @@ func (a *OauthProfileApiService) CreateOauthProfileAccessLevelGroupMsgVpnAccessL
 }
 
 type OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfileClientAllowedHost
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfileClientAllowedHost
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Allowed Host Value object&#39;s attributes.
@@ -512,11 +518,13 @@ func (r OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest) Body(body 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest {
 	r.select_ = &select_
@@ -552,8 +560,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) CreateOauthProfileClientAllowedHost(ctx context.Context, oauthProfileName string) OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest {
 	return OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -562,10 +570,10 @@ func (a *OauthProfileApiService) CreateOauthProfileClientAllowedHost(ctx context
 //  @return OauthProfileClientAllowedHostResponse
 func (a *OauthProfileApiService) CreateOauthProfileClientAllowedHostExecute(r OauthProfileApiApiCreateOauthProfileClientAllowedHostRequest) (*OauthProfileClientAllowedHostResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAllowedHostResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAllowedHostResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfileClientAllowedHost")
@@ -630,13 +638,13 @@ func (a *OauthProfileApiService) CreateOauthProfileClientAllowedHostExecute(r Oa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -653,12 +661,12 @@ func (a *OauthProfileApiService) CreateOauthProfileClientAllowedHostExecute(r Oa
 }
 
 type OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfileClientAuthorizationParameter
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfileClientAuthorizationParameter
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Authorization Parameter object&#39;s attributes.
@@ -666,11 +674,13 @@ func (r OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest)
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest {
 	r.select_ = &select_
@@ -706,8 +716,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) CreateOauthProfileClientAuthorizationParameter(ctx context.Context, oauthProfileName string) OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest {
 	return OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -716,10 +726,10 @@ func (a *OauthProfileApiService) CreateOauthProfileClientAuthorizationParameter(
 //  @return OauthProfileClientAuthorizationParameterResponse
 func (a *OauthProfileApiService) CreateOauthProfileClientAuthorizationParameterExecute(r OauthProfileApiApiCreateOauthProfileClientAuthorizationParameterRequest) (*OauthProfileClientAuthorizationParameterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAuthorizationParameterResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAuthorizationParameterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfileClientAuthorizationParameter")
@@ -784,13 +794,13 @@ func (a *OauthProfileApiService) CreateOauthProfileClientAuthorizationParameterE
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -807,12 +817,12 @@ func (a *OauthProfileApiService) CreateOauthProfileClientAuthorizationParameterE
 }
 
 type OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfileClientRequiredClaim
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfileClientRequiredClaim
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Required Claim object&#39;s attributes.
@@ -820,11 +830,13 @@ func (r OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest) Body(bod
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest {
 	r.select_ = &select_
@@ -861,8 +873,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) CreateOauthProfileClientRequiredClaim(ctx context.Context, oauthProfileName string) OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest {
 	return OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -871,10 +883,10 @@ func (a *OauthProfileApiService) CreateOauthProfileClientRequiredClaim(ctx conte
 //  @return OauthProfileClientRequiredClaimResponse
 func (a *OauthProfileApiService) CreateOauthProfileClientRequiredClaimExecute(r OauthProfileApiApiCreateOauthProfileClientRequiredClaimRequest) (*OauthProfileClientRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfileClientRequiredClaim")
@@ -939,13 +951,13 @@ func (a *OauthProfileApiService) CreateOauthProfileClientRequiredClaimExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -962,12 +974,12 @@ func (a *OauthProfileApiService) CreateOauthProfileClientRequiredClaimExecute(r 
 }
 
 type OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfileDefaultMsgVpnAccessLevelException
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfileDefaultMsgVpnAccessLevelException
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Message VPN Access-Level Exception object&#39;s attributes.
@@ -975,11 +987,13 @@ func (r OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionReq
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -1015,8 +1029,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) CreateOauthProfileDefaultMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string) OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -1025,10 +1039,10 @@ func (a *OauthProfileApiService) CreateOauthProfileDefaultMsgVpnAccessLevelExcep
 //  @return OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) CreateOauthProfileDefaultMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiCreateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) (*OauthProfileDefaultMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfileDefaultMsgVpnAccessLevelException")
@@ -1093,13 +1107,13 @@ func (a *OauthProfileApiService) CreateOauthProfileDefaultMsgVpnAccessLevelExcep
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1116,12 +1130,12 @@ func (a *OauthProfileApiService) CreateOauthProfileDefaultMsgVpnAccessLevelExcep
 }
 
 type OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfileResourceServerRequiredClaim
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfileResourceServerRequiredClaim
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Required Claim object&#39;s attributes.
@@ -1129,11 +1143,13 @@ func (r OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest) 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest) Select_(select_ []string) OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest {
 	r.select_ = &select_
@@ -1170,8 +1186,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) CreateOauthProfileResourceServerRequiredClaim(ctx context.Context, oauthProfileName string) OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest {
 	return OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -1180,10 +1196,10 @@ func (a *OauthProfileApiService) CreateOauthProfileResourceServerRequiredClaim(c
 //  @return OauthProfileResourceServerRequiredClaimResponse
 func (a *OauthProfileApiService) CreateOauthProfileResourceServerRequiredClaimExecute(r OauthProfileApiApiCreateOauthProfileResourceServerRequiredClaimRequest) (*OauthProfileResourceServerRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileResourceServerRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileResourceServerRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.CreateOauthProfileResourceServerRequiredClaim")
@@ -1248,13 +1264,13 @@ func (a *OauthProfileApiService) CreateOauthProfileResourceServerRequiredClaimEx
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1271,11 +1287,10 @@ func (a *OauthProfileApiService) CreateOauthProfileResourceServerRequiredClaimEx
 }
 
 type OauthProfileApiApiDeleteOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileExecute(r)
@@ -1298,8 +1313,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfile(ctx context.Context, oauthProfileName string) OauthProfileApiApiDeleteOauthProfileRequest {
 	return OauthProfileApiApiDeleteOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -1308,10 +1323,10 @@ func (a *OauthProfileApiService) DeleteOauthProfile(ctx context.Context, oauthPr
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileExecute(r OauthProfileApiApiDeleteOauthProfileRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfile")
@@ -1365,13 +1380,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileExecute(r OauthProfileApiApiD
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1388,12 +1403,11 @@ func (a *OauthProfileApiService) DeleteOauthProfileExecute(r OauthProfileApiApiD
 }
 
 type OauthProfileApiApiDeleteOauthProfileAccessLevelGroupRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
+	groupName        string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileAccessLevelGroupRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileAccessLevelGroupExecute(r)
@@ -1417,10 +1431,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroup(ctx context.Context, oauthProfileName string, groupName string) OauthProfileApiApiDeleteOauthProfileAccessLevelGroupRequest {
 	return OauthProfileApiApiDeleteOauthProfileAccessLevelGroupRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
+		groupName:        groupName,
 	}
 }
 
@@ -1428,10 +1442,10 @@ func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroup(ctx context.
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupExecute(r OauthProfileApiApiDeleteOauthProfileAccessLevelGroupRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfileAccessLevelGroup")
@@ -1486,13 +1500,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupExecute(r Oau
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1509,13 +1523,12 @@ func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupExecute(r Oau
 }
 
 type OauthProfileApiApiDeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	msgVpnName string
+	groupName        string
+	msgVpnName       string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionExecute(r)
@@ -1540,11 +1553,11 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, groupName string, msgVpnName string) OauthProfileApiApiDeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiDeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
-		msgVpnName: msgVpnName,
+		groupName:        groupName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -1552,10 +1565,10 @@ func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupMsgVpnAccessL
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiDeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfileAccessLevelGroupMsgVpnAccessLevelException")
@@ -1611,13 +1624,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupMsgVpnAccessL
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1634,12 +1647,11 @@ func (a *OauthProfileApiService) DeleteOauthProfileAccessLevelGroupMsgVpnAccessL
 }
 
 type OauthProfileApiApiDeleteOauthProfileClientAllowedHostRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	allowedHost string
+	allowedHost      string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileClientAllowedHostRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileClientAllowedHostExecute(r)
@@ -1663,10 +1675,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfileClientAllowedHost(ctx context.Context, oauthProfileName string, allowedHost string) OauthProfileApiApiDeleteOauthProfileClientAllowedHostRequest {
 	return OauthProfileApiApiDeleteOauthProfileClientAllowedHostRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		allowedHost: allowedHost,
+		allowedHost:      allowedHost,
 	}
 }
 
@@ -1674,10 +1686,10 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientAllowedHost(ctx context
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileClientAllowedHostExecute(r OauthProfileApiApiDeleteOauthProfileClientAllowedHostRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfileClientAllowedHost")
@@ -1732,13 +1744,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientAllowedHostExecute(r Oa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1755,12 +1767,11 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientAllowedHostExecute(r Oa
 }
 
 type OauthProfileApiApiDeleteOauthProfileClientAuthorizationParameterRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                        context.Context
+	ApiService                 *OauthProfileApiService
+	oauthProfileName           string
 	authorizationParameterName string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileClientAuthorizationParameterRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileClientAuthorizationParameterExecute(r)
@@ -1784,9 +1795,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfileClientAuthorizationParameter(ctx context.Context, oauthProfileName string, authorizationParameterName string) OauthProfileApiApiDeleteOauthProfileClientAuthorizationParameterRequest {
 	return OauthProfileApiApiDeleteOauthProfileClientAuthorizationParameterRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:                 a,
+		ctx:                        ctx,
+		oauthProfileName:           oauthProfileName,
 		authorizationParameterName: authorizationParameterName,
 	}
 }
@@ -1795,10 +1806,10 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientAuthorizationParameter(
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileClientAuthorizationParameterExecute(r OauthProfileApiApiDeleteOauthProfileClientAuthorizationParameterRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfileClientAuthorizationParameter")
@@ -1853,13 +1864,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientAuthorizationParameterE
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1876,12 +1887,11 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientAuthorizationParameterE
 }
 
 type OauthProfileApiApiDeleteOauthProfileClientRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                     context.Context
+	ApiService              *OauthProfileApiService
+	oauthProfileName        string
 	clientRequiredClaimName string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileClientRequiredClaimRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileClientRequiredClaimExecute(r)
@@ -1905,9 +1915,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfileClientRequiredClaim(ctx context.Context, oauthProfileName string, clientRequiredClaimName string) OauthProfileApiApiDeleteOauthProfileClientRequiredClaimRequest {
 	return OauthProfileApiApiDeleteOauthProfileClientRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:              a,
+		ctx:                     ctx,
+		oauthProfileName:        oauthProfileName,
 		clientRequiredClaimName: clientRequiredClaimName,
 	}
 }
@@ -1916,10 +1926,10 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientRequiredClaim(ctx conte
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileClientRequiredClaimExecute(r OauthProfileApiApiDeleteOauthProfileClientRequiredClaimRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfileClientRequiredClaim")
@@ -1974,13 +1984,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientRequiredClaimExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1997,12 +2007,11 @@ func (a *OauthProfileApiService) DeleteOauthProfileClientRequiredClaimExecute(r 
 }
 
 type OauthProfileApiApiDeleteOauthProfileDefaultMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	msgVpnName string
+	msgVpnName       string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileDefaultMsgVpnAccessLevelExceptionExecute(r)
@@ -2026,10 +2035,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfileDefaultMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, msgVpnName string) OauthProfileApiApiDeleteOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiDeleteOauthProfileDefaultMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		msgVpnName: msgVpnName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -2037,10 +2046,10 @@ func (a *OauthProfileApiService) DeleteOauthProfileDefaultMsgVpnAccessLevelExcep
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileDefaultMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiDeleteOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfileDefaultMsgVpnAccessLevelException")
@@ -2095,13 +2104,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileDefaultMsgVpnAccessLevelExcep
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2118,12 +2127,11 @@ func (a *OauthProfileApiService) DeleteOauthProfileDefaultMsgVpnAccessLevelExcep
 }
 
 type OauthProfileApiApiDeleteOauthProfileResourceServerRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                             context.Context
+	ApiService                      *OauthProfileApiService
+	oauthProfileName                string
 	resourceServerRequiredClaimName string
 }
-
 
 func (r OauthProfileApiApiDeleteOauthProfileResourceServerRequiredClaimRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteOauthProfileResourceServerRequiredClaimExecute(r)
@@ -2147,9 +2155,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) DeleteOauthProfileResourceServerRequiredClaim(ctx context.Context, oauthProfileName string, resourceServerRequiredClaimName string) OauthProfileApiApiDeleteOauthProfileResourceServerRequiredClaimRequest {
 	return OauthProfileApiApiDeleteOauthProfileResourceServerRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:                      a,
+		ctx:                             ctx,
+		oauthProfileName:                oauthProfileName,
 		resourceServerRequiredClaimName: resourceServerRequiredClaimName,
 	}
 }
@@ -2158,10 +2166,10 @@ func (a *OauthProfileApiService) DeleteOauthProfileResourceServerRequiredClaim(c
 //  @return SempMetaOnlyResponse
 func (a *OauthProfileApiService) DeleteOauthProfileResourceServerRequiredClaimExecute(r OauthProfileApiApiDeleteOauthProfileResourceServerRequiredClaimRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.DeleteOauthProfileResourceServerRequiredClaim")
@@ -2216,13 +2224,13 @@ func (a *OauthProfileApiService) DeleteOauthProfileResourceServerRequiredClaimEx
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2239,11 +2247,11 @@ func (a *OauthProfileApiService) DeleteOauthProfileResourceServerRequiredClaimEx
 }
 
 type OauthProfileApiApiGetOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -2251,6 +2259,7 @@ func (r OauthProfileApiApiGetOauthProfileRequest) OpaquePassword(opaquePassword 
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileRequest {
 	r.select_ = &select_
@@ -2286,8 +2295,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfile(ctx context.Context, oauthProfileName string) OauthProfileApiApiGetOauthProfileRequest {
 	return OauthProfileApiApiGetOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -2296,10 +2305,10 @@ func (a *OauthProfileApiService) GetOauthProfile(ctx context.Context, oauthProfi
 //  @return OauthProfileResponse
 func (a *OauthProfileApiService) GetOauthProfileExecute(r OauthProfileApiApiGetOauthProfileRequest) (*OauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfile")
@@ -2359,13 +2368,13 @@ func (a *OauthProfileApiService) GetOauthProfileExecute(r OauthProfileApiApiGetO
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2382,12 +2391,12 @@ func (a *OauthProfileApiService) GetOauthProfileExecute(r OauthProfileApiApiGetO
 }
 
 type OauthProfileApiApiGetOauthProfileAccessLevelGroupRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	opaquePassword *string
-	select_ *[]string
+	groupName        string
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -2395,6 +2404,7 @@ func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupRequest) OpaquePassword
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileAccessLevelGroupRequest {
 	r.select_ = &select_
@@ -2431,10 +2441,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroup(ctx context.Context, oauthProfileName string, groupName string) OauthProfileApiApiGetOauthProfileAccessLevelGroupRequest {
 	return OauthProfileApiApiGetOauthProfileAccessLevelGroupRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
+		groupName:        groupName,
 	}
 }
 
@@ -2442,10 +2452,10 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroup(ctx context.Con
 //  @return OauthProfileAccessLevelGroupResponse
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupExecute(r OauthProfileApiApiGetOauthProfileAccessLevelGroupRequest) (*OauthProfileAccessLevelGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileAccessLevelGroup")
@@ -2506,13 +2516,13 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupExecute(r OauthP
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2529,13 +2539,13 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupExecute(r OauthP
 }
 
 type OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	msgVpnName string
-	opaquePassword *string
-	select_ *[]string
+	groupName        string
+	msgVpnName       string
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -2543,6 +2553,7 @@ func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExcept
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -2581,11 +2592,11 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, groupName string, msgVpnName string) OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
-		msgVpnName: msgVpnName,
+		groupName:        groupName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -2593,10 +2604,10 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLeve
 //  @return OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) (*OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileAccessLevelGroupMsgVpnAccessLevelException")
@@ -2658,13 +2669,13 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLeve
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2681,15 +2692,15 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLeve
 }
 
 type OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	groupName        string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -2697,21 +2708,25 @@ func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExcept
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest) Where(where []string) OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest {
 	r.select_ = &select_
@@ -2749,10 +2764,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptions(ctx context.Context, oauthProfileName string, groupName string) OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest {
 	return OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
+		groupName:        groupName,
 	}
 }
 
@@ -2760,10 +2775,10 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLeve
 //  @return OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsResponse
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsExecute(r OauthProfileApiApiGetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsRequest) (*OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptions")
@@ -2833,13 +2848,13 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLeve
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2856,14 +2871,14 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupMsgVpnAccessLeve
 }
 
 type OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -2871,21 +2886,25 @@ func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest) Count(count i
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest) Where(where []string) OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest {
 	r.select_ = &select_
@@ -2921,8 +2940,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroups(ctx context.Context, oauthProfileName string) OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest {
 	return OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -2931,10 +2950,10 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroups(ctx context.Co
 //  @return OauthProfileAccessLevelGroupsResponse
 func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupsExecute(r OauthProfileApiApiGetOauthProfileAccessLevelGroupsRequest) (*OauthProfileAccessLevelGroupsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileAccessLevelGroups")
@@ -3003,13 +3022,13 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupsExecute(r Oauth
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3026,12 +3045,12 @@ func (a *OauthProfileApiService) GetOauthProfileAccessLevelGroupsExecute(r Oauth
 }
 
 type OauthProfileApiApiGetOauthProfileClientAllowedHostRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	allowedHost string
-	opaquePassword *string
-	select_ *[]string
+	allowedHost      string
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -3039,6 +3058,7 @@ func (r OauthProfileApiApiGetOauthProfileClientAllowedHostRequest) OpaquePasswor
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAllowedHostRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileClientAllowedHostRequest {
 	r.select_ = &select_
@@ -3075,10 +3095,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileClientAllowedHost(ctx context.Context, oauthProfileName string, allowedHost string) OauthProfileApiApiGetOauthProfileClientAllowedHostRequest {
 	return OauthProfileApiApiGetOauthProfileClientAllowedHostRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		allowedHost: allowedHost,
+		allowedHost:      allowedHost,
 	}
 }
 
@@ -3086,10 +3106,10 @@ func (a *OauthProfileApiService) GetOauthProfileClientAllowedHost(ctx context.Co
 //  @return OauthProfileClientAllowedHostResponse
 func (a *OauthProfileApiService) GetOauthProfileClientAllowedHostExecute(r OauthProfileApiApiGetOauthProfileClientAllowedHostRequest) (*OauthProfileClientAllowedHostResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAllowedHostResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAllowedHostResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileClientAllowedHost")
@@ -3150,13 +3170,13 @@ func (a *OauthProfileApiService) GetOauthProfileClientAllowedHostExecute(r Oauth
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3173,14 +3193,14 @@ func (a *OauthProfileApiService) GetOauthProfileClientAllowedHostExecute(r Oauth
 }
 
 type OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -3188,21 +3208,25 @@ func (r OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest) Count(count 
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest) Where(where []string) OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest {
 	r.select_ = &select_
@@ -3238,8 +3262,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileClientAllowedHosts(ctx context.Context, oauthProfileName string) OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest {
 	return OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -3248,10 +3272,10 @@ func (a *OauthProfileApiService) GetOauthProfileClientAllowedHosts(ctx context.C
 //  @return OauthProfileClientAllowedHostsResponse
 func (a *OauthProfileApiService) GetOauthProfileClientAllowedHostsExecute(r OauthProfileApiApiGetOauthProfileClientAllowedHostsRequest) (*OauthProfileClientAllowedHostsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAllowedHostsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAllowedHostsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileClientAllowedHosts")
@@ -3320,13 +3344,13 @@ func (a *OauthProfileApiService) GetOauthProfileClientAllowedHostsExecute(r Oaut
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3343,12 +3367,12 @@ func (a *OauthProfileApiService) GetOauthProfileClientAllowedHostsExecute(r Oaut
 }
 
 type OauthProfileApiApiGetOauthProfileClientAuthorizationParameterRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                        context.Context
+	ApiService                 *OauthProfileApiService
+	oauthProfileName           string
 	authorizationParameterName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword             *string
+	select_                    *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -3356,6 +3380,7 @@ func (r OauthProfileApiApiGetOauthProfileClientAuthorizationParameterRequest) Op
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAuthorizationParameterRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileClientAuthorizationParameterRequest {
 	r.select_ = &select_
@@ -3392,9 +3417,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParameter(ctx context.Context, oauthProfileName string, authorizationParameterName string) OauthProfileApiApiGetOauthProfileClientAuthorizationParameterRequest {
 	return OauthProfileApiApiGetOauthProfileClientAuthorizationParameterRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:                 a,
+		ctx:                        ctx,
+		oauthProfileName:           oauthProfileName,
 		authorizationParameterName: authorizationParameterName,
 	}
 }
@@ -3403,10 +3428,10 @@ func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParameter(ctx
 //  @return OauthProfileClientAuthorizationParameterResponse
 func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParameterExecute(r OauthProfileApiApiGetOauthProfileClientAuthorizationParameterRequest) (*OauthProfileClientAuthorizationParameterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAuthorizationParameterResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAuthorizationParameterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileClientAuthorizationParameter")
@@ -3467,13 +3492,13 @@ func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParameterExec
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3490,14 +3515,14 @@ func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParameterExec
 }
 
 type OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -3505,21 +3530,25 @@ func (r OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest) C
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest) Where(where []string) OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest {
 	r.select_ = &select_
@@ -3555,8 +3584,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParameters(ctx context.Context, oauthProfileName string) OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest {
 	return OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -3565,10 +3594,10 @@ func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParameters(ct
 //  @return OauthProfileClientAuthorizationParametersResponse
 func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParametersExecute(r OauthProfileApiApiGetOauthProfileClientAuthorizationParametersRequest) (*OauthProfileClientAuthorizationParametersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAuthorizationParametersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAuthorizationParametersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileClientAuthorizationParameters")
@@ -3637,13 +3666,13 @@ func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParametersExe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3660,12 +3689,12 @@ func (a *OauthProfileApiService) GetOauthProfileClientAuthorizationParametersExe
 }
 
 type OauthProfileApiApiGetOauthProfileClientRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                     context.Context
+	ApiService              *OauthProfileApiService
+	oauthProfileName        string
 	clientRequiredClaimName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword          *string
+	select_                 *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -3673,6 +3702,7 @@ func (r OauthProfileApiApiGetOauthProfileClientRequiredClaimRequest) OpaquePassw
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientRequiredClaimRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileClientRequiredClaimRequest {
 	r.select_ = &select_
@@ -3709,9 +3739,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaim(ctx context.Context, oauthProfileName string, clientRequiredClaimName string) OauthProfileApiApiGetOauthProfileClientRequiredClaimRequest {
 	return OauthProfileApiApiGetOauthProfileClientRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:              a,
+		ctx:                     ctx,
+		oauthProfileName:        oauthProfileName,
 		clientRequiredClaimName: clientRequiredClaimName,
 	}
 }
@@ -3720,10 +3750,10 @@ func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaim(ctx context.
 //  @return OauthProfileClientRequiredClaimResponse
 func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaimExecute(r OauthProfileApiApiGetOauthProfileClientRequiredClaimRequest) (*OauthProfileClientRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileClientRequiredClaim")
@@ -3784,13 +3814,13 @@ func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaimExecute(r Oau
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3807,14 +3837,14 @@ func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaimExecute(r Oau
 }
 
 type OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -3822,21 +3852,25 @@ func (r OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest) Count(coun
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest) Where(where []string) OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest {
 	r.select_ = &select_
@@ -3872,8 +3906,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaims(ctx context.Context, oauthProfileName string) OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest {
 	return OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -3882,10 +3916,10 @@ func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaims(ctx context
 //  @return OauthProfileClientRequiredClaimsResponse
 func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaimsExecute(r OauthProfileApiApiGetOauthProfileClientRequiredClaimsRequest) (*OauthProfileClientRequiredClaimsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientRequiredClaimsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientRequiredClaimsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileClientRequiredClaims")
@@ -3954,13 +3988,13 @@ func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaimsExecute(r Oa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3977,12 +4011,12 @@ func (a *OauthProfileApiService) GetOauthProfileClientRequiredClaimsExecute(r Oa
 }
 
 type OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	msgVpnName string
-	opaquePassword *string
-	select_ *[]string
+	msgVpnName       string
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -3990,6 +4024,7 @@ func (r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionReques
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -4026,10 +4061,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, msgVpnName string) OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		msgVpnName: msgVpnName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -4037,10 +4072,10 @@ func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptio
 //  @return OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) (*OauthProfileDefaultMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileDefaultMsgVpnAccessLevelException")
@@ -4101,13 +4136,13 @@ func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptio
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4124,14 +4159,14 @@ func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptio
 }
 
 type OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -4139,21 +4174,25 @@ func (r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsReque
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest) Where(where []string) OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest {
 	r.select_ = &select_
@@ -4189,8 +4228,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptions(ctx context.Context, oauthProfileName string) OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest {
 	return OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -4199,10 +4238,10 @@ func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptio
 //  @return OauthProfileDefaultMsgVpnAccessLevelExceptionsResponse
 func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptionsExecute(r OauthProfileApiApiGetOauthProfileDefaultMsgVpnAccessLevelExceptionsRequest) (*OauthProfileDefaultMsgVpnAccessLevelExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileDefaultMsgVpnAccessLevelExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileDefaultMsgVpnAccessLevelExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileDefaultMsgVpnAccessLevelExceptions")
@@ -4271,13 +4310,13 @@ func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptio
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4294,12 +4333,12 @@ func (a *OauthProfileApiService) GetOauthProfileDefaultMsgVpnAccessLevelExceptio
 }
 
 type OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                             context.Context
+	ApiService                      *OauthProfileApiService
+	oauthProfileName                string
 	resourceServerRequiredClaimName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword                  *string
+	select_                         *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -4307,6 +4346,7 @@ func (r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimRequest) Opa
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimRequest {
 	r.select_ = &select_
@@ -4343,9 +4383,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaim(ctx context.Context, oauthProfileName string, resourceServerRequiredClaimName string) OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimRequest {
 	return OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:                      a,
+		ctx:                             ctx,
+		oauthProfileName:                oauthProfileName,
 		resourceServerRequiredClaimName: resourceServerRequiredClaimName,
 	}
 }
@@ -4354,10 +4394,10 @@ func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaim(ctx 
 //  @return OauthProfileResourceServerRequiredClaimResponse
 func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaimExecute(r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimRequest) (*OauthProfileResourceServerRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileResourceServerRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileResourceServerRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileResourceServerRequiredClaim")
@@ -4418,13 +4458,13 @@ func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaimExecu
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4441,14 +4481,14 @@ func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaimExecu
 }
 
 type OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -4456,21 +4496,25 @@ func (r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest) Co
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest) Where(where []string) OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest {
 	r.select_ = &select_
@@ -4506,8 +4550,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaims(ctx context.Context, oauthProfileName string) OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest {
 	return OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -4516,10 +4560,10 @@ func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaims(ctx
 //  @return OauthProfileResourceServerRequiredClaimsResponse
 func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaimsExecute(r OauthProfileApiApiGetOauthProfileResourceServerRequiredClaimsRequest) (*OauthProfileResourceServerRequiredClaimsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileResourceServerRequiredClaimsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileResourceServerRequiredClaimsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfileResourceServerRequiredClaims")
@@ -4588,13 +4632,13 @@ func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaimsExec
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4611,13 +4655,13 @@ func (a *OauthProfileApiService) GetOauthProfileResourceServerRequiredClaimsExec
 }
 
 type OauthProfileApiApiGetOauthProfilesRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *OauthProfileApiService
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -4625,21 +4669,25 @@ func (r OauthProfileApiApiGetOauthProfilesRequest) Count(count int32) OauthProfi
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfilesRequest) Cursor(cursor string) OauthProfileApiApiGetOauthProfilesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfilesRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiGetOauthProfilesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfilesRequest) Where(where []string) OauthProfileApiApiGetOauthProfilesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiGetOauthProfilesRequest) Select_(select_ []string) OauthProfileApiApiGetOauthProfilesRequest {
 	r.select_ = &select_
@@ -4675,7 +4723,7 @@ This has been available since 2.24.
 func (a *OauthProfileApiService) GetOauthProfiles(ctx context.Context) OauthProfileApiApiGetOauthProfilesRequest {
 	return OauthProfileApiApiGetOauthProfilesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
@@ -4683,10 +4731,10 @@ func (a *OauthProfileApiService) GetOauthProfiles(ctx context.Context) OauthProf
 //  @return OauthProfilesResponse
 func (a *OauthProfileApiService) GetOauthProfilesExecute(r OauthProfileApiApiGetOauthProfilesRequest) (*OauthProfilesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfilesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfilesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.GetOauthProfiles")
@@ -4754,13 +4802,13 @@ func (a *OauthProfileApiService) GetOauthProfilesExecute(r OauthProfileApiApiGet
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4777,12 +4825,12 @@ func (a *OauthProfileApiService) GetOauthProfilesExecute(r OauthProfileApiApiGet
 }
 
 type OauthProfileApiApiReplaceOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfile
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfile
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The OAuth Profile object&#39;s attributes.
@@ -4790,11 +4838,13 @@ func (r OauthProfileApiApiReplaceOauthProfileRequest) Body(body OauthProfile) Oa
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiReplaceOauthProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileRequest) Select_(select_ []string) OauthProfileApiApiReplaceOauthProfileRequest {
 	r.select_ = &select_
@@ -4873,8 +4923,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) ReplaceOauthProfile(ctx context.Context, oauthProfileName string) OauthProfileApiApiReplaceOauthProfileRequest {
 	return OauthProfileApiApiReplaceOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -4883,10 +4933,10 @@ func (a *OauthProfileApiService) ReplaceOauthProfile(ctx context.Context, oauthP
 //  @return OauthProfileResponse
 func (a *OauthProfileApiService) ReplaceOauthProfileExecute(r OauthProfileApiApiReplaceOauthProfileRequest) (*OauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.ReplaceOauthProfile")
@@ -4951,13 +5001,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileExecute(r OauthProfileApiApi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4974,13 +5024,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileExecute(r OauthProfileApiApi
 }
 
 type OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	body *OauthProfileAccessLevelGroup
-	opaquePassword *string
-	select_ *[]string
+	groupName        string
+	body             *OauthProfileAccessLevelGroup
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Group Access Level object&#39;s attributes.
@@ -4988,11 +5038,13 @@ func (r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest) Body(body 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest) Select_(select_ []string) OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest {
 	r.select_ = &select_
@@ -5036,10 +5088,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroup(ctx context.Context, oauthProfileName string, groupName string) OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest {
 	return OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
+		groupName:        groupName,
 	}
 }
 
@@ -5047,10 +5099,10 @@ func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroup(ctx context
 //  @return OauthProfileAccessLevelGroupResponse
 func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupExecute(r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupRequest) (*OauthProfileAccessLevelGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.ReplaceOauthProfileAccessLevelGroup")
@@ -5116,13 +5168,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupExecute(r Oa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5139,14 +5191,14 @@ func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupExecute(r Oa
 }
 
 type OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	msgVpnName string
-	body *OauthProfileAccessLevelGroupMsgVpnAccessLevelException
-	opaquePassword *string
-	select_ *[]string
+	groupName        string
+	msgVpnName       string
+	body             *OauthProfileAccessLevelGroupMsgVpnAccessLevelException
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Message VPN Access-Level Exception object&#39;s attributes.
@@ -5154,11 +5206,13 @@ func (r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelEx
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -5197,11 +5251,11 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, groupName string, msgVpnName string) OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
-		msgVpnName: msgVpnName,
+		groupName:        groupName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -5209,10 +5263,10 @@ func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupMsgVpnAccess
 //  @return OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) (*OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.ReplaceOauthProfileAccessLevelGroupMsgVpnAccessLevelException")
@@ -5279,13 +5333,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupMsgVpnAccess
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5302,13 +5356,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileAccessLevelGroupMsgVpnAccess
 }
 
 type OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                        context.Context
+	ApiService                 *OauthProfileApiService
+	oauthProfileName           string
 	authorizationParameterName string
-	body *OauthProfileClientAuthorizationParameter
-	opaquePassword *string
-	select_ *[]string
+	body                       *OauthProfileClientAuthorizationParameter
+	opaquePassword             *string
+	select_                    *[]string
 }
 
 // The Authorization Parameter object&#39;s attributes.
@@ -5316,11 +5370,13 @@ func (r OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest) Select_(select_ []string) OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest {
 	r.select_ = &select_
@@ -5357,9 +5413,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) ReplaceOauthProfileClientAuthorizationParameter(ctx context.Context, oauthProfileName string, authorizationParameterName string) OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest {
 	return OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:                 a,
+		ctx:                        ctx,
+		oauthProfileName:           oauthProfileName,
 		authorizationParameterName: authorizationParameterName,
 	}
 }
@@ -5368,10 +5424,10 @@ func (a *OauthProfileApiService) ReplaceOauthProfileClientAuthorizationParameter
 //  @return OauthProfileClientAuthorizationParameterResponse
 func (a *OauthProfileApiService) ReplaceOauthProfileClientAuthorizationParameterExecute(r OauthProfileApiApiReplaceOauthProfileClientAuthorizationParameterRequest) (*OauthProfileClientAuthorizationParameterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAuthorizationParameterResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAuthorizationParameterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.ReplaceOauthProfileClientAuthorizationParameter")
@@ -5437,13 +5493,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileClientAuthorizationParameter
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5460,13 +5516,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileClientAuthorizationParameter
 }
 
 type OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	msgVpnName string
-	body *OauthProfileDefaultMsgVpnAccessLevelException
-	opaquePassword *string
-	select_ *[]string
+	msgVpnName       string
+	body             *OauthProfileDefaultMsgVpnAccessLevelException
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Message VPN Access-Level Exception object&#39;s attributes.
@@ -5474,11 +5530,13 @@ func (r OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRe
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -5515,10 +5573,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) ReplaceOauthProfileDefaultMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, msgVpnName string) OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		msgVpnName: msgVpnName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -5526,10 +5584,10 @@ func (a *OauthProfileApiService) ReplaceOauthProfileDefaultMsgVpnAccessLevelExce
 //  @return OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) ReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiReplaceOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) (*OauthProfileDefaultMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.ReplaceOauthProfileDefaultMsgVpnAccessLevelException")
@@ -5595,13 +5653,13 @@ func (a *OauthProfileApiService) ReplaceOauthProfileDefaultMsgVpnAccessLevelExce
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5618,12 +5676,12 @@ func (a *OauthProfileApiService) ReplaceOauthProfileDefaultMsgVpnAccessLevelExce
 }
 
 type OauthProfileApiApiUpdateOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	body *OauthProfile
-	opaquePassword *string
-	select_ *[]string
+	body             *OauthProfile
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The OAuth Profile object&#39;s attributes.
@@ -5631,11 +5689,13 @@ func (r OauthProfileApiApiUpdateOauthProfileRequest) Body(body OauthProfile) Oau
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiUpdateOauthProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileRequest) Select_(select_ []string) OauthProfileApiApiUpdateOauthProfileRequest {
 	r.select_ = &select_
@@ -5714,8 +5774,8 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) UpdateOauthProfile(ctx context.Context, oauthProfileName string) OauthProfileApiApiUpdateOauthProfileRequest {
 	return OauthProfileApiApiUpdateOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -5724,10 +5784,10 @@ func (a *OauthProfileApiService) UpdateOauthProfile(ctx context.Context, oauthPr
 //  @return OauthProfileResponse
 func (a *OauthProfileApiService) UpdateOauthProfileExecute(r OauthProfileApiApiUpdateOauthProfileRequest) (*OauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.UpdateOauthProfile")
@@ -5792,13 +5852,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileExecute(r OauthProfileApiApiU
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5815,13 +5875,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileExecute(r OauthProfileApiApiU
 }
 
 type OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	body *OauthProfileAccessLevelGroup
-	opaquePassword *string
-	select_ *[]string
+	groupName        string
+	body             *OauthProfileAccessLevelGroup
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Group Access Level object&#39;s attributes.
@@ -5829,11 +5889,13 @@ func (r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest) Body(body O
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest) Select_(select_ []string) OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest {
 	r.select_ = &select_
@@ -5877,10 +5939,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroup(ctx context.Context, oauthProfileName string, groupName string) OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest {
 	return OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
+		groupName:        groupName,
 	}
 }
 
@@ -5888,10 +5950,10 @@ func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroup(ctx context.
 //  @return OauthProfileAccessLevelGroupResponse
 func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupExecute(r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupRequest) (*OauthProfileAccessLevelGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.UpdateOauthProfileAccessLevelGroup")
@@ -5957,13 +6019,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupExecute(r Oau
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5980,14 +6042,14 @@ func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupExecute(r Oau
 }
 
 type OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	groupName string
-	msgVpnName string
-	body *OauthProfileAccessLevelGroupMsgVpnAccessLevelException
-	opaquePassword *string
-	select_ *[]string
+	groupName        string
+	msgVpnName       string
+	body             *OauthProfileAccessLevelGroupMsgVpnAccessLevelException
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Message VPN Access-Level Exception object&#39;s attributes.
@@ -5995,11 +6057,13 @@ func (r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExc
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -6038,11 +6102,11 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, groupName string, msgVpnName string) OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		groupName: groupName,
-		msgVpnName: msgVpnName,
+		groupName:        groupName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -6050,10 +6114,10 @@ func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupMsgVpnAccessL
 //  @return OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiUpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionRequest) (*OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileAccessLevelGroupMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.UpdateOauthProfileAccessLevelGroupMsgVpnAccessLevelException")
@@ -6120,13 +6184,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupMsgVpnAccessL
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6143,13 +6207,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileAccessLevelGroupMsgVpnAccessL
 }
 
 type OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
-	oauthProfileName string
+	ctx                        context.Context
+	ApiService                 *OauthProfileApiService
+	oauthProfileName           string
 	authorizationParameterName string
-	body *OauthProfileClientAuthorizationParameter
-	opaquePassword *string
-	select_ *[]string
+	body                       *OauthProfileClientAuthorizationParameter
+	opaquePassword             *string
+	select_                    *[]string
 }
 
 // The Authorization Parameter object&#39;s attributes.
@@ -6157,11 +6221,13 @@ func (r OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest)
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest) Select_(select_ []string) OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest {
 	r.select_ = &select_
@@ -6198,9 +6264,9 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) UpdateOauthProfileClientAuthorizationParameter(ctx context.Context, oauthProfileName string, authorizationParameterName string) OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest {
 	return OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest{
-		ApiService: a,
-		ctx: ctx,
-		oauthProfileName: oauthProfileName,
+		ApiService:                 a,
+		ctx:                        ctx,
+		oauthProfileName:           oauthProfileName,
 		authorizationParameterName: authorizationParameterName,
 	}
 }
@@ -6209,10 +6275,10 @@ func (a *OauthProfileApiService) UpdateOauthProfileClientAuthorizationParameter(
 //  @return OauthProfileClientAuthorizationParameterResponse
 func (a *OauthProfileApiService) UpdateOauthProfileClientAuthorizationParameterExecute(r OauthProfileApiApiUpdateOauthProfileClientAuthorizationParameterRequest) (*OauthProfileClientAuthorizationParameterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileClientAuthorizationParameterResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileClientAuthorizationParameterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.UpdateOauthProfileClientAuthorizationParameter")
@@ -6278,13 +6344,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileClientAuthorizationParameterE
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6301,13 +6367,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileClientAuthorizationParameterE
 }
 
 type OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest struct {
-	ctx context.Context
-	ApiService *OauthProfileApiService
+	ctx              context.Context
+	ApiService       *OauthProfileApiService
 	oauthProfileName string
-	msgVpnName string
-	body *OauthProfileDefaultMsgVpnAccessLevelException
-	opaquePassword *string
-	select_ *[]string
+	msgVpnName       string
+	body             *OauthProfileDefaultMsgVpnAccessLevelException
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Message VPN Access-Level Exception object&#39;s attributes.
@@ -6315,11 +6381,13 @@ func (r OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionReq
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) OpaquePassword(opaquePassword string) OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) Select_(select_ []string) OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	r.select_ = &select_
@@ -6356,10 +6424,10 @@ This has been available since 2.24.
 */
 func (a *OauthProfileApiService) UpdateOauthProfileDefaultMsgVpnAccessLevelException(ctx context.Context, oauthProfileName string, msgVpnName string) OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest {
 	return OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
+		ApiService:       a,
+		ctx:              ctx,
 		oauthProfileName: oauthProfileName,
-		msgVpnName: msgVpnName,
+		msgVpnName:       msgVpnName,
 	}
 }
 
@@ -6367,10 +6435,10 @@ func (a *OauthProfileApiService) UpdateOauthProfileDefaultMsgVpnAccessLevelExcep
 //  @return OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 func (a *OauthProfileApiService) UpdateOauthProfileDefaultMsgVpnAccessLevelExceptionExecute(r OauthProfileApiApiUpdateOauthProfileDefaultMsgVpnAccessLevelExceptionRequest) (*OauthProfileDefaultMsgVpnAccessLevelExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OauthProfileDefaultMsgVpnAccessLevelExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "OauthProfileApiService.UpdateOauthProfileDefaultMsgVpnAccessLevelException")
@@ -6436,13 +6504,13 @@ func (a *OauthProfileApiService) UpdateOauthProfileDefaultMsgVpnAccessLevelExcep
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 

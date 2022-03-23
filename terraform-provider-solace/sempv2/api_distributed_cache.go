@@ -1,7 +1,7 @@
 /*
 SEMP (Solace Element Management Protocol)
 
-SEMP (starting in `v2`, see note 1) is a RESTful API for configuring, monitoring, and administering a Solace PubSub+ broker.  SEMP uses URIs to address manageable **resources** of the Solace PubSub+ broker. Resources are individual **objects**, **collections** of objects, or (exclusively in the action API) **actions**. This document applies to the following API:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Configuration|/SEMP/v2/config|Reading and writing config state|See note 2    The following APIs are also available:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Action|/SEMP/v2/action|Performing actions|See note 2 Monitoring|/SEMP/v2/monitor|Querying operational parameters|See note 2    Resources are always nouns, with individual objects being singular and collections being plural.  Objects within a collection are identified by an `obj-id`, which follows the collection name with the form `collection-name/obj-id`.  Actions within an object are identified by an `action-id`, which follows the object name with the form `obj-id/action-id`.  Some examples:  ``` /SEMP/v2/config/msgVpns                        ; MsgVpn collection /SEMP/v2/config/msgVpns/a                      ; MsgVpn object named \"a\" /SEMP/v2/config/msgVpns/a/queues               ; Queue collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues/b             ; Queue object named \"b\" in MsgVpn \"a\" /SEMP/v2/action/msgVpns/a/queues/b/startReplay ; Action that starts a replay on Queue \"b\" in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients             ; Client collection in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients/c           ; Client object named \"c\" in MsgVpn \"a\" ```  ## Collection Resources  Collections are unordered lists of objects (unless described as otherwise), and are described by JSON arrays. Each item in the array represents an object in the same manner as the individual object would normally be represented. In the configuration API, the creation of a new object is done through its collection resource.  ## Object and Action Resources  Objects are composed of attributes, actions, collections, and other objects. They are described by JSON objects as name/value pairs. The collections and actions of an object are not contained directly in the object's JSON content; rather the content includes an attribute containing a URI which points to the collections and actions. These contained resources must be managed through this URI. At a minimum, every object has one or more identifying attributes, and its own `uri` attribute which contains the URI pointing to itself.  Actions are also composed of attributes, and are described by JSON objects as name/value pairs. Unlike objects, however, they are not members of a collection and cannot be retrieved, only performed. Actions only exist in the action API.  Attributes in an object or action may have any combination of the following properties:   Property|Meaning|Comments :---|:---|:--- Identifying|Attribute is involved in unique identification of the object, and appears in its URI| Required|Attribute must be provided in the request| Read-Only|Attribute can only be read, not written.|See note 3 Write-Only|Attribute can only be written, not read, unless the attribute is also opaque|See the documentation for the opaque property Requires-Disable|Attribute can only be changed when object is disabled| Deprecated|Attribute is deprecated, and will disappear in the next SEMP version| Opaque|Attribute can be set or retrieved in opaque form when the `opaquePassword` query parameter is present|See the `opaquePassword` query parameter documentation    In some requests, certain attributes may only be provided in certain combinations with other attributes:   Relationship|Meaning :---|:--- Requires|Attribute may only be changed by a request if a particular attribute or combination of attributes is also provided in the request Conflicts|Attribute may only be provided in a request if a particular attribute or combination of attributes is not also provided in the request    In the monitoring API, any non-identifying attribute may not be returned in a GET.  ## HTTP Methods  The following HTTP methods manipulate resources in accordance with these general principles. Note that some methods are only used in certain APIs:   Method|Resource|Meaning|Request Body|Response Body|Missing Request Attributes :---|:---|:---|:---|:---|:--- POST|Collection|Create object|Initial attribute values|Object attributes and metadata|Set to default PUT|Object|Create or replace object (see note 5)|New attribute values|Object attributes and metadata|Set to default, with certain exceptions (see note 4) PUT|Action|Performs action|Action arguments|Action metadata|N/A PATCH|Object|Update object|New attribute values|Object attributes and metadata|unchanged DELETE|Object|Delete object|Empty|Object metadata|N/A GET|Object|Get object|Empty|Object attributes and metadata|N/A GET|Collection|Get collection|Empty|Object attributes and collection metadata|N/A    ## Common Query Parameters  The following are some common query parameters that are supported by many method/URI combinations. Individual URIs may document additional parameters. Note that multiple query parameters can be used together in a single URI, separated by the ampersand character. For example:  ``` ; Request for the MsgVpns collection using two hypothetical query parameters ; \"q1\" and \"q2\" with values \"val1\" and \"val2\" respectively /SEMP/v2/config/msgVpns?q1=val1&q2=val2 ```  ### select  Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. Use this query parameter to limit the size of the returned data for each returned object, return only those fields that are desired, or exclude fields that are not desired.  The value of `select` is a comma-separated list of attribute names. If the list contains attribute names that are not prefaced by `-`, only those attributes are included in the response. If the list contains attribute names that are prefaced by `-`, those attributes are excluded from the response. If the list contains both types, then the difference of the first set of attributes and the second set of attributes is returned. If the list is empty (i.e. `select=`), no attributes are returned.  All attributes that are prefaced by `-` must follow all attributes that are not prefaced by `-`. In addition, each attribute name in the list must match at least one attribute in the object.  Names may include the `*` wildcard (zero or more characters). Nested attribute names are supported using periods (e.g. `parentName.childName`).  Some examples:  ``` ; List of all MsgVpn names /SEMP/v2/config/msgVpns?select=msgVpnName ; List of all MsgVpn and their attributes except for their names /SEMP/v2/config/msgVpns?select=-msgVpnName ; Authentication attributes of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance?select=authentication* ; All attributes of MsgVpn \"finance\" except for authentication attributes /SEMP/v2/config/msgVpns/finance?select=-authentication* ; Access related attributes of Queue \"orderQ\" of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance/queues/orderQ?select=owner,permission ```  ### where  Include in the response only objects where certain conditions are true. Use this query parameter to limit which objects are returned to those whose attribute values meet the given conditions.  The value of `where` is a comma-separated list of expressions. All expressions must be true for the object to be included in the response. Each expression takes the form:  ``` expression  = attribute-name OP value OP          = '==' | '!=' | '&lt;' | '&gt;' | '&lt;=' | '&gt;=' ```  `value` may be a number, string, `true`, or `false`, as appropriate for the type of `attribute-name`. Greater-than and less-than comparisons only work for numbers. A `*` in a string `value` is interpreted as a wildcard (zero or more characters). Some examples:  ``` ; Only enabled MsgVpns /SEMP/v2/config/msgVpns?where=enabled==true ; Only MsgVpns using basic non-LDAP authentication /SEMP/v2/config/msgVpns?where=authenticationBasicEnabled==true,authenticationBasicType!=ldap ; Only MsgVpns that allow more than 100 client connections /SEMP/v2/config/msgVpns?where=maxConnectionCount>100 ; Only MsgVpns with msgVpnName starting with \"B\": /SEMP/v2/config/msgVpns?where=msgVpnName==B* ```  ### count  Limit the count of objects in the response. This can be useful to limit the size of the response for large collections. The minimum value for `count` is `1` and the default is `10`. There is also a per-collection maximum value to limit request handling time.  `count` does not guarantee that a minimum number of objects will be returned. A page may contain fewer than `count` objects or even be empty. Additional objects may nonetheless be available for retrieval on subsequent pages. See the `cursor` query parameter documentation for more information on paging.  For example: ``` ; Up to 25 MsgVpns /SEMP/v2/config/msgVpns?count=25 ```  ### cursor  The cursor, or position, for the next page of objects. Cursors are opaque data that should not be created or interpreted by SEMP clients, and should only be used as described below.  When a request is made for a collection and there may be additional objects available for retrieval that are not included in the initial response, the response will include a `cursorQuery` field containing a cursor. The value of this field can be specified in the `cursor` query parameter of a subsequent request to retrieve the next page of objects. For convenience, an appropriate URI is constructed automatically by the broker and included in the `nextPageUri` field of the response. This URI can be used directly to retrieve the next page of objects.  Applications must continue to follow the `nextPageUri` if one is provided in order to retrieve the full set of objects associated with the request, even if a page contains fewer than the requested number of objects (see the `count` query parameter documentation) or is empty.  ### opaquePassword  Attributes with the opaque property are also write-only and so cannot normally be retrieved in a GET. However, when a password is provided in the `opaquePassword` query parameter, attributes with the opaque property are retrieved in a GET in opaque form, encrypted with this password. The query parameter can also be used on a POST, PATCH, or PUT to set opaque attributes using opaque attribute values retrieved in a GET, so long as:  1. the same password that was used to retrieve the opaque attribute values is provided; and  2. the broker to which the request is being sent has the same major and minor SEMP version as the broker that produced the opaque attribute values.  The password provided in the query parameter must be a minimum of 8 characters and a maximum of 128 characters.  The query parameter can only be used in the configuration API, and only over HTTPS.  ## Authentication  When a client makes its first SEMPv2 request, it must supply a username and password using HTTP Basic authentication, or an OAuth token or tokens using HTTP Bearer authentication.  When HTTP Basic authentication is used, the broker returns a cookie containing a session key. The client can omit the username and password from subsequent requests, because the broker can use the session cookie for authentication instead. When the session expires or is deleted, the client must provide the username and password again, and the broker creates a new session.  There are a limited number of session slots available on the broker. The broker returns 529 No SEMP Session Available if it is not able to allocate a session.  If certain attributes—such as a user's password—are changed, the broker automatically deletes the affected sessions. These attributes are documented below. However, changes in external user configuration data stored on a RADIUS or LDAP server do not trigger the broker to delete the associated session(s), therefore you must do this manually, if required.  A client can retrieve its current session information using the /about/user endpoint and delete its own session using the /about/user/logout endpoint. A client with appropriate permissions can also manage all sessions using the /sessions endpoint.  Sessions are not created when authenticating with an OAuth token or tokens using HTTP Bearer authentication. If a session cookie is provided, it is ignored.  ## Help  Visit [our website](https://solace.com) to learn more about Solace.  You can also download the SEMP API specifications by clicking [here](https://solace.com/downloads/).  If you need additional support, please contact us at [support@solace.com](mailto:support@solace.com).  ## Notes  Note|Description :---:|:--- 1|This specification defines SEMP starting in \"v2\", and not the original SEMP \"v1\" interface. Request and response formats between \"v1\" and \"v2\" are entirely incompatible, although both protocols share a common port configuration on the Solace PubSub+ broker. They are differentiated by the initial portion of the URI path, one of either \"/SEMP/\" or \"/SEMP/v2/\" 2|This API is partially implemented. Only a subset of all objects are available. 3|Read-only attributes may appear in POST and PUT/PATCH requests. However, if a read-only attribute is not marked as identifying, it will be ignored during a PUT/PATCH. 4|On a PUT, if the SEMP user is not authorized to modify the attribute, its value is left unchanged rather than set to default. In addition, the values of write-only attributes are not set to their defaults on a PUT, except in the following two cases: there is a mutual requires relationship with another non-write-only attribute, both attributes are absent from the request, and the non-write-only attribute is not currently set to its default value; or the attribute is also opaque and the `opaquePassword` query parameter is provided in the request. 5|On a PUT, if the object does not exist, it is created first.  
+SEMP (starting in `v2`, see note 1) is a RESTful API for configuring, monitoring, and administering a Solace PubSub+ broker.  SEMP uses URIs to address manageable **resources** of the Solace PubSub+ broker. Resources are individual **objects**, **collections** of objects, or (exclusively in the action API) **actions**. This document applies to the following API:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Configuration|/SEMP/v2/config|Reading and writing config state|See note 2    The following APIs are also available:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Action|/SEMP/v2/action|Performing actions|See note 2 Monitoring|/SEMP/v2/monitor|Querying operational parameters|See note 2    Resources are always nouns, with individual objects being singular and collections being plural.  Objects within a collection are identified by an `obj-id`, which follows the collection name with the form `collection-name/obj-id`.  Actions within an object are identified by an `action-id`, which follows the object name with the form `obj-id/action-id`.  Some examples:  ``` /SEMP/v2/config/msgVpns                        ; MsgVpn collection /SEMP/v2/config/msgVpns/a                      ; MsgVpn object named \"a\" /SEMP/v2/config/msgVpns/a/queues               ; Queue collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues/b             ; Queue object named \"b\" in MsgVpn \"a\" /SEMP/v2/action/msgVpns/a/queues/b/startReplay ; Action that starts a replay on Queue \"b\" in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients             ; Client collection in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients/c           ; Client object named \"c\" in MsgVpn \"a\" ```  ## Collection Resources  Collections are unordered lists of objects (unless described as otherwise), and are described by JSON arrays. Each item in the array represents an object in the same manner as the individual object would normally be represented. In the configuration API, the creation of a new object is done through its collection resource.  ## Object and Action Resources  Objects are composed of attributes, actions, collections, and other objects. They are described by JSON objects as name/value pairs. The collections and actions of an object are not contained directly in the object's JSON content; rather the content includes an attribute containing a URI which points to the collections and actions. These contained resources must be managed through this URI. At a minimum, every object has one or more identifying attributes, and its own `uri` attribute which contains the URI pointing to itself.  Actions are also composed of attributes, and are described by JSON objects as name/value pairs. Unlike objects, however, they are not members of a collection and cannot be retrieved, only performed. Actions only exist in the action API.  Attributes in an object or action may have any combination of the following properties:   Property|Meaning|Comments :---|:---|:--- Identifying|Attribute is involved in unique identification of the object, and appears in its URI| Required|Attribute must be provided in the request| Read-Only|Attribute can only be read, not written.|See note 3 Write-Only|Attribute can only be written, not read, unless the attribute is also opaque|See the documentation for the opaque property Requires-Disable|Attribute can only be changed when object is disabled| Deprecated|Attribute is deprecated, and will disappear in the next SEMP version| Opaque|Attribute can be set or retrieved in opaque form when the `opaquePassword` query parameter is present|See the `opaquePassword` query parameter documentation    In some requests, certain attributes may only be provided in certain combinations with other attributes:   Relationship|Meaning :---|:--- Requires|Attribute may only be changed by a request if a particular attribute or combination of attributes is also provided in the request Conflicts|Attribute may only be provided in a request if a particular attribute or combination of attributes is not also provided in the request    In the monitoring API, any non-identifying attribute may not be returned in a GET.  ## HTTP Methods  The following HTTP methods manipulate resources in accordance with these general principles. Note that some methods are only used in certain APIs:   Method|Resource|Meaning|Request Body|Response Body|Missing Request Attributes :---|:---|:---|:---|:---|:--- POST|Collection|Create object|Initial attribute values|Object attributes and metadata|Set to default PUT|Object|Create or replace object (see note 5)|New attribute values|Object attributes and metadata|Set to default, with certain exceptions (see note 4) PUT|Action|Performs action|Action arguments|Action metadata|N/A PATCH|Object|Update object|New attribute values|Object attributes and metadata|unchanged DELETE|Object|Delete object|Empty|Object metadata|N/A GET|Object|Get object|Empty|Object attributes and metadata|N/A GET|Collection|Get collection|Empty|Object attributes and collection metadata|N/A    ## Common Query Parameters  The following are some common query parameters that are supported by many method/URI combinations. Individual URIs may document additional parameters. Note that multiple query parameters can be used together in a single URI, separated by the ampersand character. For example:  ``` ; Request for the MsgVpns collection using two hypothetical query parameters ; \"q1\" and \"q2\" with values \"val1\" and \"val2\" respectively /SEMP/v2/config/msgVpns?q1=val1&q2=val2 ```  ### select  Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. Use this query parameter to limit the size of the returned data for each returned object, return only those fields that are desired, or exclude fields that are not desired.  The value of `select` is a comma-separated list of attribute names. If the list contains attribute names that are not prefaced by `-`, only those attributes are included in the response. If the list contains attribute names that are prefaced by `-`, those attributes are excluded from the response. If the list contains both types, then the difference of the first set of attributes and the second set of attributes is returned. If the list is empty (i.e. `select=`), no attributes are returned.  All attributes that are prefaced by `-` must follow all attributes that are not prefaced by `-`. In addition, each attribute name in the list must match at least one attribute in the object.  Names may include the `*` wildcard (zero or more characters). Nested attribute names are supported using periods (e.g. `parentName.childName`).  Some examples:  ``` ; List of all MsgVpn names /SEMP/v2/config/msgVpns?select=msgVpnName ; List of all MsgVpn and their attributes except for their names /SEMP/v2/config/msgVpns?select=-msgVpnName ; Authentication attributes of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance?select=authentication* ; All attributes of MsgVpn \"finance\" except for authentication attributes /SEMP/v2/config/msgVpns/finance?select=-authentication* ; Access related attributes of Queue \"orderQ\" of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance/queues/orderQ?select=owner,permission ```  ### where  Include in the response only objects where certain conditions are true. Use this query parameter to limit which objects are returned to those whose attribute values meet the given conditions.  The value of `where` is a comma-separated list of expressions. All expressions must be true for the object to be included in the response. Each expression takes the form:  ``` expression  = attribute-name OP value OP          = '==' | '!=' | '&lt;' | '&gt;' | '&lt;=' | '&gt;=' ```  `value` may be a number, string, `true`, or `false`, as appropriate for the type of `attribute-name`. Greater-than and less-than comparisons only work for numbers. A `*` in a string `value` is interpreted as a wildcard (zero or more characters). Some examples:  ``` ; Only enabled MsgVpns /SEMP/v2/config/msgVpns?where=enabled==true ; Only MsgVpns using basic non-LDAP authentication /SEMP/v2/config/msgVpns?where=authenticationBasicEnabled==true,authenticationBasicType!=ldap ; Only MsgVpns that allow more than 100 client connections /SEMP/v2/config/msgVpns?where=maxConnectionCount>100 ; Only MsgVpns with msgVpnName starting with \"B\": /SEMP/v2/config/msgVpns?where=msgVpnName==B* ```  ### count  Limit the count of objects in the response. This can be useful to limit the size of the response for large collections. The minimum value for `count` is `1` and the default is `10`. There is also a per-collection maximum value to limit request handling time.  `count` does not guarantee that a minimum number of objects will be returned. A page may contain fewer than `count` objects or even be empty. Additional objects may nonetheless be available for retrieval on subsequent pages. See the `cursor` query parameter documentation for more information on paging.  For example: ``` ; Up to 25 MsgVpns /SEMP/v2/config/msgVpns?count=25 ```  ### cursor  The cursor, or position, for the next page of objects. Cursors are opaque data that should not be created or interpreted by SEMP clients, and should only be used as described below.  When a request is made for a collection and there may be additional objects available for retrieval that are not included in the initial response, the response will include a `cursorQuery` field containing a cursor. The value of this field can be specified in the `cursor` query parameter of a subsequent request to retrieve the next page of objects. For convenience, an appropriate URI is constructed automatically by the broker and included in the `nextPageUri` field of the response. This URI can be used directly to retrieve the next page of objects.  Applications must continue to follow the `nextPageUri` if one is provided in order to retrieve the full set of objects associated with the request, even if a page contains fewer than the requested number of objects (see the `count` query parameter documentation) or is empty.  ### opaquePassword  Attributes with the opaque property are also write-only and so cannot normally be retrieved in a GET. However, when a password is provided in the `opaquePassword` query parameter, attributes with the opaque property are retrieved in a GET in opaque form, encrypted with this password. The query parameter can also be used on a POST, PATCH, or PUT to set opaque attributes using opaque attribute values retrieved in a GET, so long as:  1. the same password that was used to retrieve the opaque attribute values is provided; and  2. the broker to which the request is being sent has the same major and minor SEMP version as the broker that produced the opaque attribute values.  The password provided in the query parameter must be a minimum of 8 characters and a maximum of 128 characters.  The query parameter can only be used in the configuration API, and only over HTTPS.  ## Authentication  When a client makes its first SEMPv2 request, it must supply a username and password using HTTP Basic authentication, or an OAuth token or tokens using HTTP Bearer authentication.  When HTTP Basic authentication is used, the broker returns a cookie containing a session key. The client can omit the username and password from subsequent requests, because the broker can use the session cookie for authentication instead. When the session expires or is deleted, the client must provide the username and password again, and the broker creates a new session.  There are a limited number of session slots available on the broker. The broker returns 529 No SEMP Session Available if it is not able to allocate a session.  If certain attributes—such as a user's password—are changed, the broker automatically deletes the affected sessions. These attributes are documented below. However, changes in external user configuration data stored on a RADIUS or LDAP server do not trigger the broker to delete the associated session(s), therefore you must do this manually, if required.  A client can retrieve its current session information using the /about/user endpoint and delete its own session using the /about/user/logout endpoint. A client with appropriate permissions can also manage all sessions using the /sessions endpoint.  Sessions are not created when authenticating with an OAuth token or tokens using HTTP Bearer authentication. If a session cookie is provided, it is ignored.  ## Help  Visit [our website](https://solace.com) to learn more about Solace.  You can also download the SEMP API specifications by clicking [here](https://solace.com/downloads/).  If you need additional support, please contact us at [support@solace.com](mailto:support@solace.com).  ## Notes  Note|Description :---:|:--- 1|This specification defines SEMP starting in \"v2\", and not the original SEMP \"v1\" interface. Request and response formats between \"v1\" and \"v2\" are entirely incompatible, although both protocols share a common port configuration on the Solace PubSub+ broker. They are differentiated by the initial portion of the URI path, one of either \"/SEMP/\" or \"/SEMP/v2/\" 2|This API is partially implemented. Only a subset of all objects are available. 3|Read-only attributes may appear in POST and PUT/PATCH requests. However, if a read-only attribute is not marked as identifying, it will be ignored during a PUT/PATCH. 4|On a PUT, if the SEMP user is not authorized to modify the attribute, its value is left unchanged rather than set to default. In addition, the values of write-only attributes are not set to their defaults on a PUT, except in the following two cases: there is a mutual requires relationship with another non-write-only attribute, both attributes are absent from the request, and the non-write-only attribute is not currently set to its default value; or the attribute is also opaque and the `opaquePassword` query parameter is provided in the request. 5|On a PUT, if the object does not exist, it is created first.
 
 API version: 2.26
 Contact: support@solace.com
@@ -29,12 +29,12 @@ var (
 type DistributedCacheApiService service
 
 type DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	body *MsgVpnDistributedCache
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	body           *MsgVpnDistributedCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Distributed Cache object&#39;s attributes.
@@ -42,11 +42,13 @@ func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest) Body(body Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest) Select_(select_ []string) DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -93,7 +95,7 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCache(ctx context.Context, msgVpnName string) DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest {
 	return DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -102,10 +104,10 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCache(ctx context.Co
 //  @return MsgVpnDistributedCacheResponse
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheExecute(r DistributedCacheApiApiCreateMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.CreateMsgVpnDistributedCache")
@@ -170,13 +172,13 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheExecute(r Distr
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -193,13 +195,13 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheExecute(r Distr
 }
 
 type DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnDistributedCacheCluster
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnDistributedCacheCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Cluster object&#39;s attributes.
@@ -207,11 +209,13 @@ func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest) Body(b
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -262,9 +266,9 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest {
 	return DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -272,10 +276,10 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheCluster(ctx con
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterExecute(r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.CreateMsgVpnDistributedCacheCluster")
@@ -341,13 +345,13 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterExecute(
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -364,14 +368,14 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterExecute(
 }
 
 type DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheClusterGlobalCachingHomeCluster
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheClusterGlobalCachingHomeCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Home Cache Cluster object&#39;s attributes.
@@ -379,11 +383,13 @@ func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) Select_(select_ []string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	r.select_ = &select_
@@ -423,10 +429,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	return DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -435,10 +441,10 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCa
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.CreateMsgVpnDistributedCacheClusterGlobalCachingHomeCluster")
@@ -505,13 +511,13 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -528,15 +534,15 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCa
 }
 
 type DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *DistributedCacheApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	body *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix
-	opaquePassword *string
-	select_ *[]string
+	body            *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // The Topic Prefix object&#39;s attributes.
@@ -544,11 +550,13 @@ func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) Select_(select_ []string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	r.select_ = &select_
@@ -590,11 +598,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	return DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -603,10 +611,10 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCa
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix")
@@ -674,13 +682,13 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -697,14 +705,14 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterGlobalCa
 }
 
 type DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheClusterInstance
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheClusterInstance
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Instance object&#39;s attributes.
@@ -712,11 +720,13 @@ func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -756,10 +766,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest {
 	return DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -768,10 +778,10 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterInstance
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterInstanceExecute(r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.CreateMsgVpnDistributedCacheClusterInstance")
@@ -838,13 +848,13 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterInstance
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -861,14 +871,14 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterInstance
 }
 
 type DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheClusterTopic
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheClusterTopic
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Topic object&#39;s attributes.
@@ -876,11 +886,13 @@ func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) B
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) Select_(select_ []string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest {
 	r.select_ = &select_
@@ -920,10 +932,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterTopic(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest {
 	return DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -932,10 +944,10 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterTopic(ct
 //  @return MsgVpnDistributedCacheClusterTopicResponse
 func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterTopicExecute(r DistributedCacheApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) (*MsgVpnDistributedCacheClusterTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterTopicResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.CreateMsgVpnDistributedCacheClusterTopic")
@@ -1002,13 +1014,13 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterTopicExe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1025,12 +1037,11 @@ func (a *DistributedCacheApiService) CreateMsgVpnDistributedCacheClusterTopicExe
 }
 
 type DistributedCacheApiApiDeleteMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DistributedCacheApiService
 	msgVpnName string
-	cacheName string
+	cacheName  string
 }
-
 
 func (r DistributedCacheApiApiDeleteMsgVpnDistributedCacheRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheExecute(r)
@@ -1055,9 +1066,9 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) DistributedCacheApiApiDeleteMsgVpnDistributedCacheRequest {
 	return DistributedCacheApiApiDeleteMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -1065,10 +1076,10 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCache(ctx context.Co
 //  @return SempMetaOnlyResponse
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheExecute(r DistributedCacheApiApiDeleteMsgVpnDistributedCacheRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.DeleteMsgVpnDistributedCache")
@@ -1123,13 +1134,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheExecute(r Distr
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1146,13 +1157,12 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheExecute(r Distr
 }
 
 type DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
+	ctx         context.Context
+	ApiService  *DistributedCacheApiService
+	msgVpnName  string
+	cacheName   string
 	clusterName string
 }
-
 
 func (r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterExecute(r)
@@ -1177,10 +1187,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterRequest {
 	return DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -1189,10 +1199,10 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheCluster(ctx con
 //  @return SempMetaOnlyResponse
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterExecute(r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.DeleteMsgVpnDistributedCacheCluster")
@@ -1248,13 +1258,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterExecute(
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1271,14 +1281,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterExecute(
 }
 
 type DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *DistributedCacheApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
 }
-
 
 func (r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r)
@@ -1304,11 +1313,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	return DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -1317,10 +1326,10 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCa
 //  @return SempMetaOnlyResponse
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeCluster")
@@ -1377,13 +1386,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1400,15 +1409,14 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCa
 }
 
 type DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *DistributedCacheApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	topicPrefix string
+	topicPrefix     string
 }
-
 
 func (r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r)
@@ -1435,13 +1443,13 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string, topicPrefix string) DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	return DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
-		topicPrefix: topicPrefix,
+		topicPrefix:     topicPrefix,
 	}
 }
 
@@ -1449,10 +1457,10 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCa
 //  @return SempMetaOnlyResponse
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix")
@@ -1510,13 +1518,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCa
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1533,14 +1541,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterGlobalCa
 }
 
 type DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx          context.Context
+	ApiService   *DistributedCacheApiService
+	msgVpnName   string
+	cacheName    string
+	clusterName  string
 	instanceName string
 }
-
 
 func (r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterInstanceExecute(r)
@@ -1566,11 +1573,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest {
 	return DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -1579,10 +1586,10 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterInstance
 //  @return SempMetaOnlyResponse
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterInstanceExecute(r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.DeleteMsgVpnDistributedCacheClusterInstance")
@@ -1639,13 +1646,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterInstance
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1662,14 +1669,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterInstance
 }
 
 type DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
+	ctx         context.Context
+	ApiService  *DistributedCacheApiService
+	msgVpnName  string
+	cacheName   string
 	clusterName string
-	topic string
+	topic       string
 }
-
 
 func (r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterTopicExecute(r)
@@ -1695,12 +1701,12 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterTopic(ctx context.Context, msgVpnName string, cacheName string, clusterName string, topic string) DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest {
 	return DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
-		topic: topic,
+		topic:       topic,
 	}
 }
 
@@ -1708,10 +1714,10 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterTopic(ct
 //  @return SempMetaOnlyResponse
 func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterTopicExecute(r DistributedCacheApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.DeleteMsgVpnDistributedCacheClusterTopic")
@@ -1768,13 +1774,13 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterTopicExe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1791,12 +1797,12 @@ func (a *DistributedCacheApiService) DeleteMsgVpnDistributedCacheClusterTopicExe
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -1804,6 +1810,7 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheRequest) OpaquePassword(o
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -1841,9 +1848,9 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) DistributedCacheApiApiGetMsgVpnDistributedCacheRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -1851,10 +1858,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCache(ctx context.Conte
 //  @return MsgVpnDistributedCacheResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCache")
@@ -1915,13 +1922,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheExecute(r Distribu
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1938,13 +1945,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheExecute(r Distribu
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -1952,6 +1959,7 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterRequest) OpaquePas
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -1990,10 +1998,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -2002,10 +2010,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheCluster(ctx contex
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheCluster")
@@ -2067,13 +2075,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterExecute(r D
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2090,14 +2098,14 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterExecute(r D
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *DistributedCacheApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -2105,6 +2113,7 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeC
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	r.select_ = &select_
@@ -2145,11 +2154,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -2158,10 +2167,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeCluster")
@@ -2224,13 +2233,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2247,15 +2256,15 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *DistributedCacheApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	topicPrefix string
-	opaquePassword *string
-	select_ *[]string
+	topicPrefix     string
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -2263,6 +2272,7 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeC
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	r.select_ = &select_
@@ -2305,13 +2315,13 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string, topicPrefix string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
-		topicPrefix: topicPrefix,
+		topicPrefix:     topicPrefix,
 	}
 }
 
@@ -2319,10 +2329,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix")
@@ -2386,13 +2396,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2409,17 +2419,17 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *DistributedCacheApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count           *int32
+	cursor          *string
+	opaquePassword  *string
+	where           *[]string
+	select_         *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -2427,21 +2437,25 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeC
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) Cursor(cursor string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) Where(where []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.select_ = &select_
@@ -2483,11 +2497,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixes(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -2496,10 +2510,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixes")
@@ -2571,13 +2585,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2594,16 +2608,16 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -2611,21 +2625,25 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeC
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) Cursor(cursor string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) Where(where []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.select_ = &select_
@@ -2665,10 +2683,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusters(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -2677,10 +2695,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusters")
@@ -2751,13 +2769,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2774,14 +2792,14 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterGlobalCachi
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	instanceName string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	instanceName   string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -2789,6 +2807,7 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstanceRequest) O
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -2829,11 +2848,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstanceRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -2842,10 +2861,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstance(ct
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstanceExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterInstance")
@@ -2908,13 +2927,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstanceExe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2931,16 +2950,16 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstanceExe
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -2948,21 +2967,25 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) 
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) Cursor(cursor string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) Where(where []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.select_ = &select_
@@ -3002,10 +3025,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstances(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -3014,10 +3037,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstances(c
 //  @return MsgVpnDistributedCacheClusterInstancesResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstancesExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) (*MsgVpnDistributedCacheClusterInstancesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstancesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstancesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterInstances")
@@ -3088,13 +3111,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstancesEx
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3111,14 +3134,14 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterInstancesEx
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	topic string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	topic          string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -3126,6 +3149,7 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicRequest) Opaq
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicRequest {
 	r.select_ = &select_
@@ -3166,12 +3190,12 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopic(ctx context.Context, msgVpnName string, cacheName string, clusterName string, topic string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
-		topic: topic,
+		topic:       topic,
 	}
 }
 
@@ -3179,10 +3203,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopic(ctx c
 //  @return MsgVpnDistributedCacheClusterTopicResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopicExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicRequest) (*MsgVpnDistributedCacheClusterTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterTopicResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterTopic")
@@ -3245,13 +3269,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopicExecut
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3268,16 +3292,16 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopicExecut
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -3285,21 +3309,25 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Cou
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Cursor(cursor string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Where(where []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.select_ = &select_
@@ -3339,10 +3367,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopics(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -3351,10 +3379,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopics(ctx 
 //  @return MsgVpnDistributedCacheClusterTopicsResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopicsExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) (*MsgVpnDistributedCacheClusterTopicsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterTopicsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterTopicsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusterTopics")
@@ -3425,13 +3453,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopicsExecu
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3448,15 +3476,15 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusterTopicsExecu
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -3464,21 +3492,25 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest) Count(co
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest) Cursor(cursor string) DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest) Where(where []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.select_ = &select_
@@ -3517,9 +3549,9 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusters(ctx context.Context, msgVpnName string, cacheName string) DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -3527,10 +3559,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClusters(ctx conte
 //  @return MsgVpnDistributedCacheClustersResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClustersExecute(r DistributedCacheApiApiGetMsgVpnDistributedCacheClustersRequest) (*MsgVpnDistributedCacheClustersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClustersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClustersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCacheClusters")
@@ -3600,13 +3632,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClustersExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3623,14 +3655,14 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCacheClustersExecute(r 
 }
 
 type DistributedCacheApiApiGetMsgVpnDistributedCachesRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -3638,21 +3670,25 @@ func (r DistributedCacheApiApiGetMsgVpnDistributedCachesRequest) Count(count int
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCachesRequest) Cursor(cursor string) DistributedCacheApiApiGetMsgVpnDistributedCachesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCachesRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiGetMsgVpnDistributedCachesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCachesRequest) Where(where []string) DistributedCacheApiApiGetMsgVpnDistributedCachesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiGetMsgVpnDistributedCachesRequest) Select_(select_ []string) DistributedCacheApiApiGetMsgVpnDistributedCachesRequest {
 	r.select_ = &select_
@@ -3689,7 +3725,7 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCaches(ctx context.Context, msgVpnName string) DistributedCacheApiApiGetMsgVpnDistributedCachesRequest {
 	return DistributedCacheApiApiGetMsgVpnDistributedCachesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -3698,10 +3734,10 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCaches(ctx context.Cont
 //  @return MsgVpnDistributedCachesResponse
 func (a *DistributedCacheApiService) GetMsgVpnDistributedCachesExecute(r DistributedCacheApiApiGetMsgVpnDistributedCachesRequest) (*MsgVpnDistributedCachesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCachesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCachesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.GetMsgVpnDistributedCaches")
@@ -3770,13 +3806,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCachesExecute(r Distrib
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3793,13 +3829,13 @@ func (a *DistributedCacheApiService) GetMsgVpnDistributedCachesExecute(r Distrib
 }
 
 type DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnDistributedCache
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnDistributedCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Distributed Cache object&#39;s attributes.
@@ -3807,11 +3843,13 @@ func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest) Body(body Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest) Select_(select_ []string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -3859,9 +3897,9 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest {
 	return DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -3869,10 +3907,10 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCache(ctx context.C
 //  @return MsgVpnDistributedCacheResponse
 func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheExecute(r DistributedCacheApiApiReplaceMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.ReplaceMsgVpnDistributedCache")
@@ -3938,13 +3976,13 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheExecute(r Dist
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3961,14 +3999,14 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheExecute(r Dist
 }
 
 type DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheCluster
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Cluster object&#39;s attributes.
@@ -3976,11 +4014,13 @@ func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest) Body(
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -4031,10 +4071,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest {
 	return DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -4043,10 +4083,10 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheCluster(ctx co
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterExecute(r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.ReplaceMsgVpnDistributedCacheCluster")
@@ -4113,13 +4153,13 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterExecute
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4136,15 +4176,15 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterExecute
 }
 
 type DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	instanceName string
-	body *MsgVpnDistributedCacheClusterInstance
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	instanceName   string
+	body           *MsgVpnDistributedCacheClusterInstance
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Instance object&#39;s attributes.
@@ -4152,11 +4192,13 @@ func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceReques
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -4197,11 +4239,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest {
 	return DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -4210,10 +4252,10 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterInstanc
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterInstanceExecute(r DistributedCacheApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.ReplaceMsgVpnDistributedCacheClusterInstance")
@@ -4281,13 +4323,13 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterInstanc
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4304,13 +4346,13 @@ func (a *DistributedCacheApiService) ReplaceMsgVpnDistributedCacheClusterInstanc
 }
 
 type DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnDistributedCache
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnDistributedCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Distributed Cache object&#39;s attributes.
@@ -4318,11 +4360,13 @@ func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest) Body(body Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest) Select_(select_ []string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -4370,9 +4414,9 @@ This has been available since 2.11.
 func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest {
 	return DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -4380,10 +4424,10 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCache(ctx context.Co
 //  @return MsgVpnDistributedCacheResponse
 func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheExecute(r DistributedCacheApiApiUpdateMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.UpdateMsgVpnDistributedCache")
@@ -4449,13 +4493,13 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheExecute(r Distr
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4472,14 +4516,14 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheExecute(r Distr
 }
 
 type DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheCluster
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Cluster object&#39;s attributes.
@@ -4487,11 +4531,13 @@ func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest) Body(b
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -4542,10 +4588,10 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest {
 	return DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -4554,10 +4600,10 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheCluster(ctx con
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheClusterExecute(r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.UpdateMsgVpnDistributedCacheCluster")
@@ -4624,13 +4670,13 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheClusterExecute(
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4647,15 +4693,15 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheClusterExecute(
 }
 
 type DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *DistributedCacheApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	instanceName string
-	body *MsgVpnDistributedCacheClusterInstance
+	ctx            context.Context
+	ApiService     *DistributedCacheApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	instanceName   string
+	body           *MsgVpnDistributedCacheClusterInstance
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Instance object&#39;s attributes.
@@ -4663,11 +4709,13 @@ func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest) OpaquePassword(opaquePassword string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -4708,11 +4756,11 @@ This has been available since 2.11.
 */
 func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest {
 	return DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -4721,10 +4769,10 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheClusterInstance
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheClusterInstanceExecute(r DistributedCacheApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DistributedCacheApiService.UpdateMsgVpnDistributedCacheClusterInstance")
@@ -4792,13 +4840,13 @@ func (a *DistributedCacheApiService) UpdateMsgVpnDistributedCacheClusterInstance
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 

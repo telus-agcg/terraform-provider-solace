@@ -1,7 +1,7 @@
 /*
 SEMP (Solace Element Management Protocol)
 
-SEMP (starting in `v2`, see note 1) is a RESTful API for configuring, monitoring, and administering a Solace PubSub+ broker.  SEMP uses URIs to address manageable **resources** of the Solace PubSub+ broker. Resources are individual **objects**, **collections** of objects, or (exclusively in the action API) **actions**. This document applies to the following API:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Configuration|/SEMP/v2/config|Reading and writing config state|See note 2    The following APIs are also available:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Action|/SEMP/v2/action|Performing actions|See note 2 Monitoring|/SEMP/v2/monitor|Querying operational parameters|See note 2    Resources are always nouns, with individual objects being singular and collections being plural.  Objects within a collection are identified by an `obj-id`, which follows the collection name with the form `collection-name/obj-id`.  Actions within an object are identified by an `action-id`, which follows the object name with the form `obj-id/action-id`.  Some examples:  ``` /SEMP/v2/config/msgVpns                        ; MsgVpn collection /SEMP/v2/config/msgVpns/a                      ; MsgVpn object named \"a\" /SEMP/v2/config/msgVpns/a/queues               ; Queue collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues/b             ; Queue object named \"b\" in MsgVpn \"a\" /SEMP/v2/action/msgVpns/a/queues/b/startReplay ; Action that starts a replay on Queue \"b\" in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients             ; Client collection in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients/c           ; Client object named \"c\" in MsgVpn \"a\" ```  ## Collection Resources  Collections are unordered lists of objects (unless described as otherwise), and are described by JSON arrays. Each item in the array represents an object in the same manner as the individual object would normally be represented. In the configuration API, the creation of a new object is done through its collection resource.  ## Object and Action Resources  Objects are composed of attributes, actions, collections, and other objects. They are described by JSON objects as name/value pairs. The collections and actions of an object are not contained directly in the object's JSON content; rather the content includes an attribute containing a URI which points to the collections and actions. These contained resources must be managed through this URI. At a minimum, every object has one or more identifying attributes, and its own `uri` attribute which contains the URI pointing to itself.  Actions are also composed of attributes, and are described by JSON objects as name/value pairs. Unlike objects, however, they are not members of a collection and cannot be retrieved, only performed. Actions only exist in the action API.  Attributes in an object or action may have any combination of the following properties:   Property|Meaning|Comments :---|:---|:--- Identifying|Attribute is involved in unique identification of the object, and appears in its URI| Required|Attribute must be provided in the request| Read-Only|Attribute can only be read, not written.|See note 3 Write-Only|Attribute can only be written, not read, unless the attribute is also opaque|See the documentation for the opaque property Requires-Disable|Attribute can only be changed when object is disabled| Deprecated|Attribute is deprecated, and will disappear in the next SEMP version| Opaque|Attribute can be set or retrieved in opaque form when the `opaquePassword` query parameter is present|See the `opaquePassword` query parameter documentation    In some requests, certain attributes may only be provided in certain combinations with other attributes:   Relationship|Meaning :---|:--- Requires|Attribute may only be changed by a request if a particular attribute or combination of attributes is also provided in the request Conflicts|Attribute may only be provided in a request if a particular attribute or combination of attributes is not also provided in the request    In the monitoring API, any non-identifying attribute may not be returned in a GET.  ## HTTP Methods  The following HTTP methods manipulate resources in accordance with these general principles. Note that some methods are only used in certain APIs:   Method|Resource|Meaning|Request Body|Response Body|Missing Request Attributes :---|:---|:---|:---|:---|:--- POST|Collection|Create object|Initial attribute values|Object attributes and metadata|Set to default PUT|Object|Create or replace object (see note 5)|New attribute values|Object attributes and metadata|Set to default, with certain exceptions (see note 4) PUT|Action|Performs action|Action arguments|Action metadata|N/A PATCH|Object|Update object|New attribute values|Object attributes and metadata|unchanged DELETE|Object|Delete object|Empty|Object metadata|N/A GET|Object|Get object|Empty|Object attributes and metadata|N/A GET|Collection|Get collection|Empty|Object attributes and collection metadata|N/A    ## Common Query Parameters  The following are some common query parameters that are supported by many method/URI combinations. Individual URIs may document additional parameters. Note that multiple query parameters can be used together in a single URI, separated by the ampersand character. For example:  ``` ; Request for the MsgVpns collection using two hypothetical query parameters ; \"q1\" and \"q2\" with values \"val1\" and \"val2\" respectively /SEMP/v2/config/msgVpns?q1=val1&q2=val2 ```  ### select  Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. Use this query parameter to limit the size of the returned data for each returned object, return only those fields that are desired, or exclude fields that are not desired.  The value of `select` is a comma-separated list of attribute names. If the list contains attribute names that are not prefaced by `-`, only those attributes are included in the response. If the list contains attribute names that are prefaced by `-`, those attributes are excluded from the response. If the list contains both types, then the difference of the first set of attributes and the second set of attributes is returned. If the list is empty (i.e. `select=`), no attributes are returned.  All attributes that are prefaced by `-` must follow all attributes that are not prefaced by `-`. In addition, each attribute name in the list must match at least one attribute in the object.  Names may include the `*` wildcard (zero or more characters). Nested attribute names are supported using periods (e.g. `parentName.childName`).  Some examples:  ``` ; List of all MsgVpn names /SEMP/v2/config/msgVpns?select=msgVpnName ; List of all MsgVpn and their attributes except for their names /SEMP/v2/config/msgVpns?select=-msgVpnName ; Authentication attributes of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance?select=authentication* ; All attributes of MsgVpn \"finance\" except for authentication attributes /SEMP/v2/config/msgVpns/finance?select=-authentication* ; Access related attributes of Queue \"orderQ\" of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance/queues/orderQ?select=owner,permission ```  ### where  Include in the response only objects where certain conditions are true. Use this query parameter to limit which objects are returned to those whose attribute values meet the given conditions.  The value of `where` is a comma-separated list of expressions. All expressions must be true for the object to be included in the response. Each expression takes the form:  ``` expression  = attribute-name OP value OP          = '==' | '!=' | '&lt;' | '&gt;' | '&lt;=' | '&gt;=' ```  `value` may be a number, string, `true`, or `false`, as appropriate for the type of `attribute-name`. Greater-than and less-than comparisons only work for numbers. A `*` in a string `value` is interpreted as a wildcard (zero or more characters). Some examples:  ``` ; Only enabled MsgVpns /SEMP/v2/config/msgVpns?where=enabled==true ; Only MsgVpns using basic non-LDAP authentication /SEMP/v2/config/msgVpns?where=authenticationBasicEnabled==true,authenticationBasicType!=ldap ; Only MsgVpns that allow more than 100 client connections /SEMP/v2/config/msgVpns?where=maxConnectionCount>100 ; Only MsgVpns with msgVpnName starting with \"B\": /SEMP/v2/config/msgVpns?where=msgVpnName==B* ```  ### count  Limit the count of objects in the response. This can be useful to limit the size of the response for large collections. The minimum value for `count` is `1` and the default is `10`. There is also a per-collection maximum value to limit request handling time.  `count` does not guarantee that a minimum number of objects will be returned. A page may contain fewer than `count` objects or even be empty. Additional objects may nonetheless be available for retrieval on subsequent pages. See the `cursor` query parameter documentation for more information on paging.  For example: ``` ; Up to 25 MsgVpns /SEMP/v2/config/msgVpns?count=25 ```  ### cursor  The cursor, or position, for the next page of objects. Cursors are opaque data that should not be created or interpreted by SEMP clients, and should only be used as described below.  When a request is made for a collection and there may be additional objects available for retrieval that are not included in the initial response, the response will include a `cursorQuery` field containing a cursor. The value of this field can be specified in the `cursor` query parameter of a subsequent request to retrieve the next page of objects. For convenience, an appropriate URI is constructed automatically by the broker and included in the `nextPageUri` field of the response. This URI can be used directly to retrieve the next page of objects.  Applications must continue to follow the `nextPageUri` if one is provided in order to retrieve the full set of objects associated with the request, even if a page contains fewer than the requested number of objects (see the `count` query parameter documentation) or is empty.  ### opaquePassword  Attributes with the opaque property are also write-only and so cannot normally be retrieved in a GET. However, when a password is provided in the `opaquePassword` query parameter, attributes with the opaque property are retrieved in a GET in opaque form, encrypted with this password. The query parameter can also be used on a POST, PATCH, or PUT to set opaque attributes using opaque attribute values retrieved in a GET, so long as:  1. the same password that was used to retrieve the opaque attribute values is provided; and  2. the broker to which the request is being sent has the same major and minor SEMP version as the broker that produced the opaque attribute values.  The password provided in the query parameter must be a minimum of 8 characters and a maximum of 128 characters.  The query parameter can only be used in the configuration API, and only over HTTPS.  ## Authentication  When a client makes its first SEMPv2 request, it must supply a username and password using HTTP Basic authentication, or an OAuth token or tokens using HTTP Bearer authentication.  When HTTP Basic authentication is used, the broker returns a cookie containing a session key. The client can omit the username and password from subsequent requests, because the broker can use the session cookie for authentication instead. When the session expires or is deleted, the client must provide the username and password again, and the broker creates a new session.  There are a limited number of session slots available on the broker. The broker returns 529 No SEMP Session Available if it is not able to allocate a session.  If certain attributes—such as a user's password—are changed, the broker automatically deletes the affected sessions. These attributes are documented below. However, changes in external user configuration data stored on a RADIUS or LDAP server do not trigger the broker to delete the associated session(s), therefore you must do this manually, if required.  A client can retrieve its current session information using the /about/user endpoint and delete its own session using the /about/user/logout endpoint. A client with appropriate permissions can also manage all sessions using the /sessions endpoint.  Sessions are not created when authenticating with an OAuth token or tokens using HTTP Bearer authentication. If a session cookie is provided, it is ignored.  ## Help  Visit [our website](https://solace.com) to learn more about Solace.  You can also download the SEMP API specifications by clicking [here](https://solace.com/downloads/).  If you need additional support, please contact us at [support@solace.com](mailto:support@solace.com).  ## Notes  Note|Description :---:|:--- 1|This specification defines SEMP starting in \"v2\", and not the original SEMP \"v1\" interface. Request and response formats between \"v1\" and \"v2\" are entirely incompatible, although both protocols share a common port configuration on the Solace PubSub+ broker. They are differentiated by the initial portion of the URI path, one of either \"/SEMP/\" or \"/SEMP/v2/\" 2|This API is partially implemented. Only a subset of all objects are available. 3|Read-only attributes may appear in POST and PUT/PATCH requests. However, if a read-only attribute is not marked as identifying, it will be ignored during a PUT/PATCH. 4|On a PUT, if the SEMP user is not authorized to modify the attribute, its value is left unchanged rather than set to default. In addition, the values of write-only attributes are not set to their defaults on a PUT, except in the following two cases: there is a mutual requires relationship with another non-write-only attribute, both attributes are absent from the request, and the non-write-only attribute is not currently set to its default value; or the attribute is also opaque and the `opaquePassword` query parameter is provided in the request. 5|On a PUT, if the object does not exist, it is created first.  
+SEMP (starting in `v2`, see note 1) is a RESTful API for configuring, monitoring, and administering a Solace PubSub+ broker.  SEMP uses URIs to address manageable **resources** of the Solace PubSub+ broker. Resources are individual **objects**, **collections** of objects, or (exclusively in the action API) **actions**. This document applies to the following API:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Configuration|/SEMP/v2/config|Reading and writing config state|See note 2    The following APIs are also available:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Action|/SEMP/v2/action|Performing actions|See note 2 Monitoring|/SEMP/v2/monitor|Querying operational parameters|See note 2    Resources are always nouns, with individual objects being singular and collections being plural.  Objects within a collection are identified by an `obj-id`, which follows the collection name with the form `collection-name/obj-id`.  Actions within an object are identified by an `action-id`, which follows the object name with the form `obj-id/action-id`.  Some examples:  ``` /SEMP/v2/config/msgVpns                        ; MsgVpn collection /SEMP/v2/config/msgVpns/a                      ; MsgVpn object named \"a\" /SEMP/v2/config/msgVpns/a/queues               ; Queue collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues/b             ; Queue object named \"b\" in MsgVpn \"a\" /SEMP/v2/action/msgVpns/a/queues/b/startReplay ; Action that starts a replay on Queue \"b\" in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients             ; Client collection in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients/c           ; Client object named \"c\" in MsgVpn \"a\" ```  ## Collection Resources  Collections are unordered lists of objects (unless described as otherwise), and are described by JSON arrays. Each item in the array represents an object in the same manner as the individual object would normally be represented. In the configuration API, the creation of a new object is done through its collection resource.  ## Object and Action Resources  Objects are composed of attributes, actions, collections, and other objects. They are described by JSON objects as name/value pairs. The collections and actions of an object are not contained directly in the object's JSON content; rather the content includes an attribute containing a URI which points to the collections and actions. These contained resources must be managed through this URI. At a minimum, every object has one or more identifying attributes, and its own `uri` attribute which contains the URI pointing to itself.  Actions are also composed of attributes, and are described by JSON objects as name/value pairs. Unlike objects, however, they are not members of a collection and cannot be retrieved, only performed. Actions only exist in the action API.  Attributes in an object or action may have any combination of the following properties:   Property|Meaning|Comments :---|:---|:--- Identifying|Attribute is involved in unique identification of the object, and appears in its URI| Required|Attribute must be provided in the request| Read-Only|Attribute can only be read, not written.|See note 3 Write-Only|Attribute can only be written, not read, unless the attribute is also opaque|See the documentation for the opaque property Requires-Disable|Attribute can only be changed when object is disabled| Deprecated|Attribute is deprecated, and will disappear in the next SEMP version| Opaque|Attribute can be set or retrieved in opaque form when the `opaquePassword` query parameter is present|See the `opaquePassword` query parameter documentation    In some requests, certain attributes may only be provided in certain combinations with other attributes:   Relationship|Meaning :---|:--- Requires|Attribute may only be changed by a request if a particular attribute or combination of attributes is also provided in the request Conflicts|Attribute may only be provided in a request if a particular attribute or combination of attributes is not also provided in the request    In the monitoring API, any non-identifying attribute may not be returned in a GET.  ## HTTP Methods  The following HTTP methods manipulate resources in accordance with these general principles. Note that some methods are only used in certain APIs:   Method|Resource|Meaning|Request Body|Response Body|Missing Request Attributes :---|:---|:---|:---|:---|:--- POST|Collection|Create object|Initial attribute values|Object attributes and metadata|Set to default PUT|Object|Create or replace object (see note 5)|New attribute values|Object attributes and metadata|Set to default, with certain exceptions (see note 4) PUT|Action|Performs action|Action arguments|Action metadata|N/A PATCH|Object|Update object|New attribute values|Object attributes and metadata|unchanged DELETE|Object|Delete object|Empty|Object metadata|N/A GET|Object|Get object|Empty|Object attributes and metadata|N/A GET|Collection|Get collection|Empty|Object attributes and collection metadata|N/A    ## Common Query Parameters  The following are some common query parameters that are supported by many method/URI combinations. Individual URIs may document additional parameters. Note that multiple query parameters can be used together in a single URI, separated by the ampersand character. For example:  ``` ; Request for the MsgVpns collection using two hypothetical query parameters ; \"q1\" and \"q2\" with values \"val1\" and \"val2\" respectively /SEMP/v2/config/msgVpns?q1=val1&q2=val2 ```  ### select  Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. Use this query parameter to limit the size of the returned data for each returned object, return only those fields that are desired, or exclude fields that are not desired.  The value of `select` is a comma-separated list of attribute names. If the list contains attribute names that are not prefaced by `-`, only those attributes are included in the response. If the list contains attribute names that are prefaced by `-`, those attributes are excluded from the response. If the list contains both types, then the difference of the first set of attributes and the second set of attributes is returned. If the list is empty (i.e. `select=`), no attributes are returned.  All attributes that are prefaced by `-` must follow all attributes that are not prefaced by `-`. In addition, each attribute name in the list must match at least one attribute in the object.  Names may include the `*` wildcard (zero or more characters). Nested attribute names are supported using periods (e.g. `parentName.childName`).  Some examples:  ``` ; List of all MsgVpn names /SEMP/v2/config/msgVpns?select=msgVpnName ; List of all MsgVpn and their attributes except for their names /SEMP/v2/config/msgVpns?select=-msgVpnName ; Authentication attributes of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance?select=authentication* ; All attributes of MsgVpn \"finance\" except for authentication attributes /SEMP/v2/config/msgVpns/finance?select=-authentication* ; Access related attributes of Queue \"orderQ\" of MsgVpn \"finance\" /SEMP/v2/config/msgVpns/finance/queues/orderQ?select=owner,permission ```  ### where  Include in the response only objects where certain conditions are true. Use this query parameter to limit which objects are returned to those whose attribute values meet the given conditions.  The value of `where` is a comma-separated list of expressions. All expressions must be true for the object to be included in the response. Each expression takes the form:  ``` expression  = attribute-name OP value OP          = '==' | '!=' | '&lt;' | '&gt;' | '&lt;=' | '&gt;=' ```  `value` may be a number, string, `true`, or `false`, as appropriate for the type of `attribute-name`. Greater-than and less-than comparisons only work for numbers. A `*` in a string `value` is interpreted as a wildcard (zero or more characters). Some examples:  ``` ; Only enabled MsgVpns /SEMP/v2/config/msgVpns?where=enabled==true ; Only MsgVpns using basic non-LDAP authentication /SEMP/v2/config/msgVpns?where=authenticationBasicEnabled==true,authenticationBasicType!=ldap ; Only MsgVpns that allow more than 100 client connections /SEMP/v2/config/msgVpns?where=maxConnectionCount>100 ; Only MsgVpns with msgVpnName starting with \"B\": /SEMP/v2/config/msgVpns?where=msgVpnName==B* ```  ### count  Limit the count of objects in the response. This can be useful to limit the size of the response for large collections. The minimum value for `count` is `1` and the default is `10`. There is also a per-collection maximum value to limit request handling time.  `count` does not guarantee that a minimum number of objects will be returned. A page may contain fewer than `count` objects or even be empty. Additional objects may nonetheless be available for retrieval on subsequent pages. See the `cursor` query parameter documentation for more information on paging.  For example: ``` ; Up to 25 MsgVpns /SEMP/v2/config/msgVpns?count=25 ```  ### cursor  The cursor, or position, for the next page of objects. Cursors are opaque data that should not be created or interpreted by SEMP clients, and should only be used as described below.  When a request is made for a collection and there may be additional objects available for retrieval that are not included in the initial response, the response will include a `cursorQuery` field containing a cursor. The value of this field can be specified in the `cursor` query parameter of a subsequent request to retrieve the next page of objects. For convenience, an appropriate URI is constructed automatically by the broker and included in the `nextPageUri` field of the response. This URI can be used directly to retrieve the next page of objects.  Applications must continue to follow the `nextPageUri` if one is provided in order to retrieve the full set of objects associated with the request, even if a page contains fewer than the requested number of objects (see the `count` query parameter documentation) or is empty.  ### opaquePassword  Attributes with the opaque property are also write-only and so cannot normally be retrieved in a GET. However, when a password is provided in the `opaquePassword` query parameter, attributes with the opaque property are retrieved in a GET in opaque form, encrypted with this password. The query parameter can also be used on a POST, PATCH, or PUT to set opaque attributes using opaque attribute values retrieved in a GET, so long as:  1. the same password that was used to retrieve the opaque attribute values is provided; and  2. the broker to which the request is being sent has the same major and minor SEMP version as the broker that produced the opaque attribute values.  The password provided in the query parameter must be a minimum of 8 characters and a maximum of 128 characters.  The query parameter can only be used in the configuration API, and only over HTTPS.  ## Authentication  When a client makes its first SEMPv2 request, it must supply a username and password using HTTP Basic authentication, or an OAuth token or tokens using HTTP Bearer authentication.  When HTTP Basic authentication is used, the broker returns a cookie containing a session key. The client can omit the username and password from subsequent requests, because the broker can use the session cookie for authentication instead. When the session expires or is deleted, the client must provide the username and password again, and the broker creates a new session.  There are a limited number of session slots available on the broker. The broker returns 529 No SEMP Session Available if it is not able to allocate a session.  If certain attributes—such as a user's password—are changed, the broker automatically deletes the affected sessions. These attributes are documented below. However, changes in external user configuration data stored on a RADIUS or LDAP server do not trigger the broker to delete the associated session(s), therefore you must do this manually, if required.  A client can retrieve its current session information using the /about/user endpoint and delete its own session using the /about/user/logout endpoint. A client with appropriate permissions can also manage all sessions using the /sessions endpoint.  Sessions are not created when authenticating with an OAuth token or tokens using HTTP Bearer authentication. If a session cookie is provided, it is ignored.  ## Help  Visit [our website](https://solace.com) to learn more about Solace.  You can also download the SEMP API specifications by clicking [here](https://solace.com/downloads/).  If you need additional support, please contact us at [support@solace.com](mailto:support@solace.com).  ## Notes  Note|Description :---:|:--- 1|This specification defines SEMP starting in \"v2\", and not the original SEMP \"v1\" interface. Request and response formats between \"v1\" and \"v2\" are entirely incompatible, although both protocols share a common port configuration on the Solace PubSub+ broker. They are differentiated by the initial portion of the URI path, one of either \"/SEMP/\" or \"/SEMP/v2/\" 2|This API is partially implemented. Only a subset of all objects are available. 3|Read-only attributes may appear in POST and PUT/PATCH requests. However, if a read-only attribute is not marked as identifying, it will be ignored during a PUT/PATCH. 4|On a PUT, if the SEMP user is not authorized to modify the attribute, its value is left unchanged rather than set to default. In addition, the values of write-only attributes are not set to their defaults on a PUT, except in the following two cases: there is a mutual requires relationship with another non-write-only attribute, both attributes are absent from the request, and the non-write-only attribute is not currently set to its default value; or the attribute is also opaque and the `opaquePassword` query parameter is provided in the request. 5|On a PUT, if the object does not exist, it is created first.
 
 API version: 2.26
 Contact: support@solace.com
@@ -29,11 +29,11 @@ var (
 type MsgVpnApiService service
 
 type MsgVpnApiApiCreateMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	body *MsgVpn
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	body           *MsgVpn
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Message VPN object&#39;s attributes.
@@ -41,11 +41,13 @@ func (r MsgVpnApiApiCreateMsgVpnRequest) Body(body MsgVpn) MsgVpnApiApiCreateMsg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnRequest {
 	r.select_ = &select_
@@ -109,7 +111,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpn(ctx context.Context) MsgVpnApiApiCreateMsgVpnRequest {
 	return MsgVpnApiApiCreateMsgVpnRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
@@ -117,10 +119,10 @@ func (a *MsgVpnApiService) CreateMsgVpn(ctx context.Context) MsgVpnApiApiCreateM
 //  @return MsgVpnResponse
 func (a *MsgVpnApiService) CreateMsgVpnExecute(r MsgVpnApiApiCreateMsgVpnRequest) (*MsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpn")
@@ -184,13 +186,13 @@ func (a *MsgVpnApiService) CreateMsgVpnExecute(r MsgVpnApiApiCreateMsgVpnRequest
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -207,12 +209,12 @@ func (a *MsgVpnApiService) CreateMsgVpnExecute(r MsgVpnApiApiCreateMsgVpnRequest
 }
 
 type MsgVpnApiApiCreateMsgVpnAclProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnAclProfile
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnAclProfile
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The ACL Profile object&#39;s attributes.
@@ -220,11 +222,13 @@ func (r MsgVpnApiApiCreateMsgVpnAclProfileRequest) Body(body MsgVpnAclProfile) M
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAclProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAclProfileRequest {
 	r.select_ = &select_
@@ -261,7 +265,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnAclProfile(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnAclProfileRequest {
 	return MsgVpnApiApiCreateMsgVpnAclProfileRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -270,10 +274,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfile(ctx context.Context, msgVpnNam
 //  @return MsgVpnAclProfileResponse
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileExecute(r MsgVpnApiApiCreateMsgVpnAclProfileRequest) (*MsgVpnAclProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAclProfile")
@@ -338,13 +342,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileExecute(r MsgVpnApiApiCreateMsg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -361,13 +365,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileExecute(r MsgVpnApiApiCreateMsg
 }
 
 type MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfileClientConnectException
+	body           *MsgVpnAclProfileClientConnectException
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Client Connect Exception object&#39;s attributes.
@@ -375,11 +379,13 @@ func (r MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest) Body(bo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest {
 	r.select_ = &select_
@@ -417,9 +423,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileClientConnectException(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest {
 	return MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -428,10 +434,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileClientConnectException(ctx cont
 //  @return MsgVpnAclProfileClientConnectExceptionResponse
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileClientConnectExceptionExecute(r MsgVpnApiApiCreateMsgVpnAclProfileClientConnectExceptionRequest) (*MsgVpnAclProfileClientConnectExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileClientConnectExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileClientConnectExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAclProfileClientConnectException")
@@ -497,13 +503,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileClientConnectExceptionExecute(r
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -520,13 +526,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileClientConnectExceptionExecute(r
 }
 
 type MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfilePublishException
+	body           *MsgVpnAclProfilePublishException
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Publish Topic Exception object&#39;s attributes.
@@ -534,11 +540,13 @@ func (r MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest) Body(body Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest {
 	r.select_ = &select_
@@ -579,9 +587,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishException(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest {
 	return MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -591,10 +599,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishException(ctx context.Co
 // Deprecated
 func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishExceptionExecute(r MsgVpnApiApiCreateMsgVpnAclProfilePublishExceptionRequest) (*MsgVpnAclProfilePublishExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfilePublishExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfilePublishExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAclProfilePublishException")
@@ -660,13 +668,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishExceptionExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -683,13 +691,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishExceptionExecute(r MsgVp
 }
 
 type MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfilePublishTopicException
+	body           *MsgVpnAclProfilePublishTopicException
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Publish Topic Exception object&#39;s attributes.
@@ -697,11 +705,13 @@ func (r MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest) Body(bod
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest {
 	r.select_ = &select_
@@ -740,9 +750,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishTopicException(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest {
 	return MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -751,10 +761,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishTopicException(ctx conte
 //  @return MsgVpnAclProfilePublishTopicExceptionResponse
 func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishTopicExceptionExecute(r MsgVpnApiApiCreateMsgVpnAclProfilePublishTopicExceptionRequest) (*MsgVpnAclProfilePublishTopicExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfilePublishTopicExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfilePublishTopicExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAclProfilePublishTopicException")
@@ -820,13 +830,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishTopicExceptionExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -843,13 +853,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfilePublishTopicExceptionExecute(r 
 }
 
 type MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfileSubscribeException
+	body           *MsgVpnAclProfileSubscribeException
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Subscribe Topic Exception object&#39;s attributes.
@@ -857,11 +867,13 @@ func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest) Body(body M
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest {
 	r.select_ = &select_
@@ -902,9 +914,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeException(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest {
 	return MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -914,10 +926,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeException(ctx context.
 // Deprecated
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeExceptionExecute(r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeExceptionRequest) (*MsgVpnAclProfileSubscribeExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAclProfileSubscribeException")
@@ -983,13 +995,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeExceptionExecute(r Msg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1006,13 +1018,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeExceptionExecute(r Msg
 }
 
 type MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfileSubscribeShareNameException
+	body           *MsgVpnAclProfileSubscribeShareNameException
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Subscribe Share Name Exception object&#39;s attributes.
@@ -1020,11 +1032,13 @@ func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest) Bo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest {
 	r.select_ = &select_
@@ -1063,9 +1077,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeShareNameException(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest {
 	return MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -1074,10 +1088,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeShareNameException(ctx
 //  @return MsgVpnAclProfileSubscribeShareNameExceptionResponse
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeShareNameExceptionExecute(r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeShareNameExceptionRequest) (*MsgVpnAclProfileSubscribeShareNameExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeShareNameExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeShareNameExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAclProfileSubscribeShareNameException")
@@ -1143,13 +1157,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeShareNameExceptionExec
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1166,13 +1180,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeShareNameExceptionExec
 }
 
 type MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfileSubscribeTopicException
+	body           *MsgVpnAclProfileSubscribeTopicException
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Subscribe Topic Exception object&#39;s attributes.
@@ -1180,11 +1194,13 @@ func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest) Body(b
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest {
 	r.select_ = &select_
@@ -1223,9 +1239,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeTopicException(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest {
 	return MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -1234,10 +1250,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeTopicException(ctx con
 //  @return MsgVpnAclProfileSubscribeTopicExceptionResponse
 func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeTopicExceptionExecute(r MsgVpnApiApiCreateMsgVpnAclProfileSubscribeTopicExceptionRequest) (*MsgVpnAclProfileSubscribeTopicExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeTopicExceptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeTopicExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAclProfileSubscribeTopicException")
@@ -1303,13 +1319,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeTopicExceptionExecute(
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1326,12 +1342,12 @@ func (a *MsgVpnApiService) CreateMsgVpnAclProfileSubscribeTopicExceptionExecute(
 }
 
 type MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnAuthenticationOauthProfile
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnAuthenticationOauthProfile
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The OAuth Profile object&#39;s attributes.
@@ -1339,11 +1355,13 @@ func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest) Body(body Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest {
 	r.select_ = &select_
@@ -1381,7 +1399,7 @@ This has been available since 2.25.
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfile(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest {
 	return MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -1390,10 +1408,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfile(ctx context.Co
 //  @return MsgVpnAuthenticationOauthProfileResponse
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileExecute(r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileRequest) (*MsgVpnAuthenticationOauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAuthenticationOauthProfile")
@@ -1458,13 +1476,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1481,13 +1499,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileExecute(r MsgVp
 }
 
 type MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
-	body *MsgVpnAuthenticationOauthProfileClientRequiredClaim
-	opaquePassword *string
-	select_ *[]string
+	body             *MsgVpnAuthenticationOauthProfileClientRequiredClaim
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Required Claim object&#39;s attributes.
@@ -1495,11 +1513,13 @@ func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimReq
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest {
 	r.select_ = &select_
@@ -1538,9 +1558,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileClientRequiredClaim(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest {
 	return MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -1549,10 +1569,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileClientRequiredC
 //  @return MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileClientRequiredClaimExecute(r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest) (*MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAuthenticationOauthProfileClientRequiredClaim")
@@ -1618,13 +1638,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileClientRequiredC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1641,13 +1661,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileClientRequiredC
 }
 
 type MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
-	body *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaim
-	opaquePassword *string
-	select_ *[]string
+	body             *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaim
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The Required Claim object&#39;s attributes.
@@ -1655,11 +1675,13 @@ func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequired
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest {
 	r.select_ = &select_
@@ -1698,9 +1720,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaim(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest {
 	return MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -1709,10 +1731,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileResourceServerR
 //  @return MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimExecute(r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest) (*MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAuthenticationOauthProfileResourceServerRequiredClaim")
@@ -1778,13 +1800,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileResourceServerR
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1801,12 +1823,12 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProfileResourceServerR
 }
 
 type MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnAuthenticationOauthProvider
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnAuthenticationOauthProvider
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The OAuth Provider object&#39;s attributes.
@@ -1814,11 +1836,13 @@ func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest) Body(body Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest {
 	r.select_ = &select_
@@ -1877,7 +1901,7 @@ Deprecated
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProvider(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest {
 	return MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -1887,10 +1911,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProvider(ctx context.C
 // Deprecated
 func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProviderExecute(r MsgVpnApiApiCreateMsgVpnAuthenticationOauthProviderRequest) (*MsgVpnAuthenticationOauthProviderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProviderResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProviderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAuthenticationOauthProvider")
@@ -1955,13 +1979,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProviderExecute(r MsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -1978,12 +2002,12 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthenticationOauthProviderExecute(r MsgV
 }
 
 type MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnAuthorizationGroup
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnAuthorizationGroup
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Authorization Group object&#39;s attributes.
@@ -1991,11 +2015,13 @@ func (r MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest) Body(body MsgVpnAutho
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest {
 	r.select_ = &select_
@@ -2044,7 +2070,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnAuthorizationGroup(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest {
 	return MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -2053,10 +2079,10 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthorizationGroup(ctx context.Context, m
 //  @return MsgVpnAuthorizationGroupResponse
 func (a *MsgVpnApiService) CreateMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiCreateMsgVpnAuthorizationGroupRequest) (*MsgVpnAuthorizationGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthorizationGroupResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthorizationGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnAuthorizationGroup")
@@ -2121,13 +2147,13 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2144,12 +2170,12 @@ func (a *MsgVpnApiService) CreateMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiC
 }
 
 type MsgVpnApiApiCreateMsgVpnBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnBridge
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnBridge
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Bridge object&#39;s attributes.
@@ -2157,11 +2183,13 @@ func (r MsgVpnApiApiCreateMsgVpnBridgeRequest) Body(body MsgVpnBridge) MsgVpnApi
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnBridgeRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnBridgeRequest {
 	r.select_ = &select_
@@ -2213,7 +2241,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnBridge(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnBridgeRequest {
 	return MsgVpnApiApiCreateMsgVpnBridgeRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -2222,10 +2250,10 @@ func (a *MsgVpnApiService) CreateMsgVpnBridge(ctx context.Context, msgVpnName st
 //  @return MsgVpnBridgeResponse
 func (a *MsgVpnApiService) CreateMsgVpnBridgeExecute(r MsgVpnApiApiCreateMsgVpnBridgeRequest) (*MsgVpnBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnBridge")
@@ -2290,13 +2318,13 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeExecute(r MsgVpnApiApiCreateMsgVpnB
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2313,14 +2341,14 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeExecute(r MsgVpnApiApiCreateMsgVpnB
 }
 
 type MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	body *MsgVpnBridgeRemoteMsgVpn
-	opaquePassword *string
-	select_ *[]string
+	body                *MsgVpnBridgeRemoteMsgVpn
+	opaquePassword      *string
+	select_             *[]string
 }
 
 // The Remote Message VPN object&#39;s attributes.
@@ -2328,11 +2356,13 @@ func (r MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest) Body(body MsgVpnBridg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest {
 	r.select_ = &select_
@@ -2385,10 +2415,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteMsgVpn(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest {
 	return MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -2397,10 +2427,10 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteMsgVpn(ctx context.Context, m
 //  @return MsgVpnBridgeRemoteMsgVpnResponse
 func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiCreateMsgVpnBridgeRemoteMsgVpnRequest) (*MsgVpnBridgeRemoteMsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteMsgVpnResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteMsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnBridgeRemoteMsgVpn")
@@ -2467,13 +2497,13 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2490,14 +2520,14 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiC
 }
 
 type MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	body *MsgVpnBridgeRemoteSubscription
-	opaquePassword *string
-	select_ *[]string
+	body                *MsgVpnBridgeRemoteSubscription
+	opaquePassword      *string
+	select_             *[]string
 }
 
 // The Remote Subscription object&#39;s attributes.
@@ -2505,11 +2535,13 @@ func (r MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest) Body(body MsgVp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest {
 	r.select_ = &select_
@@ -2550,10 +2582,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteSubscription(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest {
 	return MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -2562,10 +2594,10 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteSubscription(ctx context.Cont
 //  @return MsgVpnBridgeRemoteSubscriptionResponse
 func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnApiApiCreateMsgVpnBridgeRemoteSubscriptionRequest) (*MsgVpnBridgeRemoteSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteSubscriptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnBridgeRemoteSubscription")
@@ -2632,13 +2664,13 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2655,14 +2687,14 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	body *MsgVpnBridgeTlsTrustedCommonName
-	opaquePassword *string
-	select_ *[]string
+	body                *MsgVpnBridgeTlsTrustedCommonName
+	opaquePassword      *string
+	select_             *[]string
 }
 
 // The Trusted Common Name object&#39;s attributes.
@@ -2670,11 +2702,13 @@ func (r MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest) Body(body Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest {
 	r.select_ = &select_
@@ -2716,10 +2750,10 @@ Deprecated
 */
 func (a *MsgVpnApiService) CreateMsgVpnBridgeTlsTrustedCommonName(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest {
 	return MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -2729,10 +2763,10 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeTlsTrustedCommonName(ctx context.Co
 // Deprecated
 func (a *MsgVpnApiService) CreateMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVpnApiApiCreateMsgVpnBridgeTlsTrustedCommonNameRequest) (*MsgVpnBridgeTlsTrustedCommonNameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeTlsTrustedCommonNameResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeTlsTrustedCommonNameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnBridgeTlsTrustedCommonName")
@@ -2799,13 +2833,13 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2822,12 +2856,12 @@ func (a *MsgVpnApiService) CreateMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVp
 }
 
 type MsgVpnApiApiCreateMsgVpnClientProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnClientProfile
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnClientProfile
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Client Profile object&#39;s attributes.
@@ -2835,11 +2869,13 @@ func (r MsgVpnApiApiCreateMsgVpnClientProfileRequest) Body(body MsgVpnClientProf
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnClientProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnClientProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnClientProfileRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnClientProfileRequest {
 	r.select_ = &select_
@@ -2893,7 +2929,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnClientProfile(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnClientProfileRequest {
 	return MsgVpnApiApiCreateMsgVpnClientProfileRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -2902,10 +2938,10 @@ func (a *MsgVpnApiService) CreateMsgVpnClientProfile(ctx context.Context, msgVpn
 //  @return MsgVpnClientProfileResponse
 func (a *MsgVpnApiService) CreateMsgVpnClientProfileExecute(r MsgVpnApiApiCreateMsgVpnClientProfileRequest) (*MsgVpnClientProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientProfileResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnClientProfile")
@@ -2970,13 +3006,13 @@ func (a *MsgVpnApiService) CreateMsgVpnClientProfileExecute(r MsgVpnApiApiCreate
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -2993,12 +3029,12 @@ func (a *MsgVpnApiService) CreateMsgVpnClientProfileExecute(r MsgVpnApiApiCreate
 }
 
 type MsgVpnApiApiCreateMsgVpnClientUsernameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnClientUsername
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnClientUsername
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Client Username object&#39;s attributes.
@@ -3006,11 +3042,13 @@ func (r MsgVpnApiApiCreateMsgVpnClientUsernameRequest) Body(body MsgVpnClientUse
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnClientUsernameRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnClientUsernameRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnClientUsernameRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnClientUsernameRequest {
 	r.select_ = &select_
@@ -3048,7 +3086,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnClientUsername(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnClientUsernameRequest {
 	return MsgVpnApiApiCreateMsgVpnClientUsernameRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -3057,10 +3095,10 @@ func (a *MsgVpnApiService) CreateMsgVpnClientUsername(ctx context.Context, msgVp
 //  @return MsgVpnClientUsernameResponse
 func (a *MsgVpnApiService) CreateMsgVpnClientUsernameExecute(r MsgVpnApiApiCreateMsgVpnClientUsernameRequest) (*MsgVpnClientUsernameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientUsernameResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientUsernameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnClientUsername")
@@ -3125,13 +3163,13 @@ func (a *MsgVpnApiService) CreateMsgVpnClientUsernameExecute(r MsgVpnApiApiCreat
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3148,12 +3186,12 @@ func (a *MsgVpnApiService) CreateMsgVpnClientUsernameExecute(r MsgVpnApiApiCreat
 }
 
 type MsgVpnApiApiCreateMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnDistributedCache
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnDistributedCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Distributed Cache object&#39;s attributes.
@@ -3161,11 +3199,13 @@ func (r MsgVpnApiApiCreateMsgVpnDistributedCacheRequest) Body(body MsgVpnDistrib
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnDistributedCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -3212,7 +3252,7 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCache(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnDistributedCacheRequest {
 	return MsgVpnApiApiCreateMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -3221,10 +3261,10 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCache(ctx context.Context, msg
 //  @return MsgVpnDistributedCacheResponse
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheExecute(r MsgVpnApiApiCreateMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnDistributedCache")
@@ -3289,13 +3329,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheExecute(r MsgVpnApiApiCre
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3312,13 +3352,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheExecute(r MsgVpnApiApiCre
 }
 
 type MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnDistributedCacheCluster
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnDistributedCacheCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Cluster object&#39;s attributes.
@@ -3326,11 +3366,13 @@ func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest) Body(body MsgVpn
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -3381,9 +3423,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest {
 	return MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -3391,10 +3433,10 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheCluster(ctx context.Conte
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterExecute(r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnDistributedCacheCluster")
@@ -3460,13 +3502,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3483,14 +3525,14 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheClusterGlobalCachingHomeCluster
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheClusterGlobalCachingHomeCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Home Cache Cluster object&#39;s attributes.
@@ -3498,11 +3540,13 @@ func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterR
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	r.select_ = &select_
@@ -3542,10 +3586,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	return MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -3554,10 +3598,10 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeC
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnDistributedCacheClusterGlobalCachingHomeCluster")
@@ -3624,13 +3668,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3647,15 +3691,15 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeC
 }
 
 type MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	body *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix
-	opaquePassword *string
-	select_ *[]string
+	body            *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // The Topic Prefix object&#39;s attributes.
@@ -3663,11 +3707,13 @@ func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterT
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	r.select_ = &select_
@@ -3709,11 +3755,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	return MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -3722,10 +3768,10 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeC
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix")
@@ -3793,13 +3839,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3816,14 +3862,14 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterGlobalCachingHomeC
 }
 
 type MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheClusterInstance
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheClusterInstance
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Instance object&#39;s attributes.
@@ -3831,11 +3877,13 @@ func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest) Body(bod
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -3875,10 +3923,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest {
 	return MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -3887,10 +3935,10 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterInstance(ctx conte
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterInstanceExecute(r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnDistributedCacheClusterInstance")
@@ -3957,13 +4005,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterInstanceExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -3980,14 +4028,14 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterInstanceExecute(r 
 }
 
 type MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheClusterTopic
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheClusterTopic
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Topic object&#39;s attributes.
@@ -3995,11 +4043,13 @@ func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) Body(body M
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest {
 	r.select_ = &select_
@@ -4039,10 +4089,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterTopic(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest {
 	return MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -4051,10 +4101,10 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterTopic(ctx context.
 //  @return MsgVpnDistributedCacheClusterTopicResponse
 func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterTopicExecute(r MsgVpnApiApiCreateMsgVpnDistributedCacheClusterTopicRequest) (*MsgVpnDistributedCacheClusterTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterTopicResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnDistributedCacheClusterTopic")
@@ -4121,13 +4171,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterTopicExecute(r Msg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4144,12 +4194,12 @@ func (a *MsgVpnApiService) CreateMsgVpnDistributedCacheClusterTopicExecute(r Msg
 }
 
 type MsgVpnApiApiCreateMsgVpnDmrBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnDmrBridge
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnDmrBridge
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The DMR Bridge object&#39;s attributes.
@@ -4157,11 +4207,13 @@ func (r MsgVpnApiApiCreateMsgVpnDmrBridgeRequest) Body(body MsgVpnDmrBridge) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDmrBridgeRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnDmrBridgeRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnDmrBridgeRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnDmrBridgeRequest {
 	r.select_ = &select_
@@ -4198,7 +4250,7 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) CreateMsgVpnDmrBridge(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnDmrBridgeRequest {
 	return MsgVpnApiApiCreateMsgVpnDmrBridgeRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -4207,10 +4259,10 @@ func (a *MsgVpnApiService) CreateMsgVpnDmrBridge(ctx context.Context, msgVpnName
 //  @return MsgVpnDmrBridgeResponse
 func (a *MsgVpnApiService) CreateMsgVpnDmrBridgeExecute(r MsgVpnApiApiCreateMsgVpnDmrBridgeRequest) (*MsgVpnDmrBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDmrBridgeResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDmrBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnDmrBridge")
@@ -4275,13 +4327,13 @@ func (a *MsgVpnApiService) CreateMsgVpnDmrBridgeExecute(r MsgVpnApiApiCreateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4298,12 +4350,12 @@ func (a *MsgVpnApiService) CreateMsgVpnDmrBridgeExecute(r MsgVpnApiApiCreateMsgV
 }
 
 type MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnJndiConnectionFactory
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnJndiConnectionFactory
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The JNDI Connection Factory object&#39;s attributes.
@@ -4311,11 +4363,13 @@ func (r MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest) Body(body MsgVpnJn
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest {
 	r.select_ = &select_
@@ -4352,7 +4406,7 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) CreateMsgVpnJndiConnectionFactory(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest {
 	return MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -4361,10 +4415,10 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiConnectionFactory(ctx context.Context
 //  @return MsgVpnJndiConnectionFactoryResponse
 func (a *MsgVpnApiService) CreateMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiApiCreateMsgVpnJndiConnectionFactoryRequest) (*MsgVpnJndiConnectionFactoryResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiConnectionFactoryResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiConnectionFactoryResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnJndiConnectionFactory")
@@ -4429,13 +4483,13 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4452,12 +4506,12 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiCreateMsgVpnJndiQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnJndiQueue
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnJndiQueue
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The JNDI Queue object&#39;s attributes.
@@ -4465,11 +4519,13 @@ func (r MsgVpnApiApiCreateMsgVpnJndiQueueRequest) Body(body MsgVpnJndiQueue) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnJndiQueueRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnJndiQueueRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnJndiQueueRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnJndiQueueRequest {
 	r.select_ = &select_
@@ -4506,7 +4562,7 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) CreateMsgVpnJndiQueue(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnJndiQueueRequest {
 	return MsgVpnApiApiCreateMsgVpnJndiQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -4515,10 +4571,10 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiQueue(ctx context.Context, msgVpnName
 //  @return MsgVpnJndiQueueResponse
 func (a *MsgVpnApiService) CreateMsgVpnJndiQueueExecute(r MsgVpnApiApiCreateMsgVpnJndiQueueRequest) (*MsgVpnJndiQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiQueueResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnJndiQueue")
@@ -4583,13 +4639,13 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiQueueExecute(r MsgVpnApiApiCreateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4606,12 +4662,12 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiQueueExecute(r MsgVpnApiApiCreateMsgV
 }
 
 type MsgVpnApiApiCreateMsgVpnJndiTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnJndiTopic
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnJndiTopic
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The JNDI Topic object&#39;s attributes.
@@ -4619,11 +4675,13 @@ func (r MsgVpnApiApiCreateMsgVpnJndiTopicRequest) Body(body MsgVpnJndiTopic) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnJndiTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnJndiTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnJndiTopicRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnJndiTopicRequest {
 	r.select_ = &select_
@@ -4660,7 +4718,7 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) CreateMsgVpnJndiTopic(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnJndiTopicRequest {
 	return MsgVpnApiApiCreateMsgVpnJndiTopicRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -4669,10 +4727,10 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiTopic(ctx context.Context, msgVpnName
 //  @return MsgVpnJndiTopicResponse
 func (a *MsgVpnApiService) CreateMsgVpnJndiTopicExecute(r MsgVpnApiApiCreateMsgVpnJndiTopicRequest) (*MsgVpnJndiTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiTopicResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnJndiTopic")
@@ -4737,13 +4795,13 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiTopicExecute(r MsgVpnApiApiCreateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4760,12 +4818,12 @@ func (a *MsgVpnApiService) CreateMsgVpnJndiTopicExecute(r MsgVpnApiApiCreateMsgV
 }
 
 type MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnMqttRetainCache
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnMqttRetainCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The MQTT Retain Cache object&#39;s attributes.
@@ -4773,11 +4831,13 @@ func (r MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest) Body(body MsgVpnMqttReta
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest {
 	r.select_ = &select_
@@ -4814,7 +4874,7 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) CreateMsgVpnMqttRetainCache(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest {
 	return MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -4823,10 +4883,10 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttRetainCache(ctx context.Context, msgV
 //  @return MsgVpnMqttRetainCacheResponse
 func (a *MsgVpnApiService) CreateMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiCreateMsgVpnMqttRetainCacheRequest) (*MsgVpnMqttRetainCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttRetainCacheResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttRetainCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnMqttRetainCache")
@@ -4891,13 +4951,13 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiCrea
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -4914,12 +4974,12 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiCrea
 }
 
 type MsgVpnApiApiCreateMsgVpnMqttSessionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnMqttSession
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnMqttSession
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The MQTT Session object&#39;s attributes.
@@ -4927,11 +4987,13 @@ func (r MsgVpnApiApiCreateMsgVpnMqttSessionRequest) Body(body MsgVpnMqttSession)
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnMqttSessionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnMqttSessionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnMqttSessionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnMqttSessionRequest {
 	r.select_ = &select_
@@ -4981,7 +5043,7 @@ This has been available since 2.1.
 func (a *MsgVpnApiService) CreateMsgVpnMqttSession(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnMqttSessionRequest {
 	return MsgVpnApiApiCreateMsgVpnMqttSessionRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -4990,10 +5052,10 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttSession(ctx context.Context, msgVpnNa
 //  @return MsgVpnMqttSessionResponse
 func (a *MsgVpnApiService) CreateMsgVpnMqttSessionExecute(r MsgVpnApiApiCreateMsgVpnMqttSessionRequest) (*MsgVpnMqttSessionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnMqttSession")
@@ -5058,13 +5120,13 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttSessionExecute(r MsgVpnApiApiCreateMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5081,14 +5143,14 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttSessionExecute(r MsgVpnApiApiCreateMs
 }
 
 type MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	body *MsgVpnMqttSessionSubscription
-	opaquePassword *string
-	select_ *[]string
+	body                     *MsgVpnMqttSessionSubscription
+	opaquePassword           *string
+	select_                  *[]string
 }
 
 // The Subscription object&#39;s attributes.
@@ -5096,11 +5158,13 @@ func (r MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest) Body(body MsgVpn
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest {
 	r.select_ = &select_
@@ -5140,10 +5204,10 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) CreateMsgVpnMqttSessionSubscription(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string) MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest {
 	return MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
 	}
 }
@@ -5152,10 +5216,10 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttSessionSubscription(ctx context.Conte
 //  @return MsgVpnMqttSessionSubscriptionResponse
 func (a *MsgVpnApiService) CreateMsgVpnMqttSessionSubscriptionExecute(r MsgVpnApiApiCreateMsgVpnMqttSessionSubscriptionRequest) (*MsgVpnMqttSessionSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionSubscriptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnMqttSessionSubscription")
@@ -5222,13 +5286,13 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttSessionSubscriptionExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5245,12 +5309,12 @@ func (a *MsgVpnApiService) CreateMsgVpnMqttSessionSubscriptionExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiCreateMsgVpnQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnQueue
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnQueue
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Queue object&#39;s attributes.
@@ -5258,11 +5322,13 @@ func (r MsgVpnApiApiCreateMsgVpnQueueRequest) Body(body MsgVpnQueue) MsgVpnApiAp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnQueueRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnQueueRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnQueueRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnQueueRequest {
 	r.select_ = &select_
@@ -5311,7 +5377,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnQueue(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnQueueRequest {
 	return MsgVpnApiApiCreateMsgVpnQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -5320,10 +5386,10 @@ func (a *MsgVpnApiService) CreateMsgVpnQueue(ctx context.Context, msgVpnName str
 //  @return MsgVpnQueueResponse
 func (a *MsgVpnApiService) CreateMsgVpnQueueExecute(r MsgVpnApiApiCreateMsgVpnQueueRequest) (*MsgVpnQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnQueue")
@@ -5388,13 +5454,13 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueExecute(r MsgVpnApiApiCreateMsgVpnQu
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5411,13 +5477,13 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueExecute(r MsgVpnApiApiCreateMsgVpnQu
 }
 
 type MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
-	body *MsgVpnQueueSubscription
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
+	body           *MsgVpnQueueSubscription
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Queue Subscription object&#39;s attributes.
@@ -5425,11 +5491,13 @@ func (r MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest) Body(body MsgVpnQueueS
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest {
 	r.select_ = &select_
@@ -5468,9 +5536,9 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnQueueSubscription(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest {
 	return MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -5478,10 +5546,10 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueSubscription(ctx context.Context, ms
 //  @return MsgVpnQueueSubscriptionResponse
 func (a *MsgVpnApiService) CreateMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiCreateMsgVpnQueueSubscriptionRequest) (*MsgVpnQueueSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueSubscriptionResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnQueueSubscription")
@@ -5547,13 +5615,13 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiCr
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5570,12 +5638,12 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiCr
 }
 
 type MsgVpnApiApiCreateMsgVpnQueueTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnQueueTemplate
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnQueueTemplate
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Queue Template object&#39;s attributes.
@@ -5583,11 +5651,13 @@ func (r MsgVpnApiApiCreateMsgVpnQueueTemplateRequest) Body(body MsgVpnQueueTempl
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnQueueTemplateRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnQueueTemplateRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnQueueTemplateRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnQueueTemplateRequest {
 	r.select_ = &select_
@@ -5636,7 +5706,7 @@ This has been available since 2.14.
 func (a *MsgVpnApiService) CreateMsgVpnQueueTemplate(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnQueueTemplateRequest {
 	return MsgVpnApiApiCreateMsgVpnQueueTemplateRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -5645,10 +5715,10 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueTemplate(ctx context.Context, msgVpn
 //  @return MsgVpnQueueTemplateResponse
 func (a *MsgVpnApiService) CreateMsgVpnQueueTemplateExecute(r MsgVpnApiApiCreateMsgVpnQueueTemplateRequest) (*MsgVpnQueueTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueTemplateResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnQueueTemplate")
@@ -5713,13 +5783,13 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueTemplateExecute(r MsgVpnApiApiCreate
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5736,12 +5806,12 @@ func (a *MsgVpnApiService) CreateMsgVpnQueueTemplateExecute(r MsgVpnApiApiCreate
 }
 
 type MsgVpnApiApiCreateMsgVpnReplayLogRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnReplayLog
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnReplayLog
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Replay Log object&#39;s attributes.
@@ -5749,11 +5819,13 @@ func (r MsgVpnApiApiCreateMsgVpnReplayLogRequest) Body(body MsgVpnReplayLog) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnReplayLogRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnReplayLogRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnReplayLogRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnReplayLogRequest {
 	r.select_ = &select_
@@ -5790,7 +5862,7 @@ This has been available since 2.10.
 func (a *MsgVpnApiService) CreateMsgVpnReplayLog(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnReplayLogRequest {
 	return MsgVpnApiApiCreateMsgVpnReplayLogRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -5799,10 +5871,10 @@ func (a *MsgVpnApiService) CreateMsgVpnReplayLog(ctx context.Context, msgVpnName
 //  @return MsgVpnReplayLogResponse
 func (a *MsgVpnApiService) CreateMsgVpnReplayLogExecute(r MsgVpnApiApiCreateMsgVpnReplayLogRequest) (*MsgVpnReplayLogResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplayLogResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplayLogResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnReplayLog")
@@ -5867,13 +5939,13 @@ func (a *MsgVpnApiService) CreateMsgVpnReplayLogExecute(r MsgVpnApiApiCreateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -5890,12 +5962,12 @@ func (a *MsgVpnApiService) CreateMsgVpnReplayLogExecute(r MsgVpnApiApiCreateMsgV
 }
 
 type MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnReplicatedTopic
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnReplicatedTopic
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Replicated Topic object&#39;s attributes.
@@ -5903,11 +5975,13 @@ func (r MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest) Body(body MsgVpnReplicat
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest {
 	r.select_ = &select_
@@ -5944,7 +6018,7 @@ This has been available since 2.1.
 func (a *MsgVpnApiService) CreateMsgVpnReplicatedTopic(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest {
 	return MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -5953,10 +6027,10 @@ func (a *MsgVpnApiService) CreateMsgVpnReplicatedTopic(ctx context.Context, msgV
 //  @return MsgVpnReplicatedTopicResponse
 func (a *MsgVpnApiService) CreateMsgVpnReplicatedTopicExecute(r MsgVpnApiApiCreateMsgVpnReplicatedTopicRequest) (*MsgVpnReplicatedTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplicatedTopicResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplicatedTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnReplicatedTopic")
@@ -6021,13 +6095,13 @@ func (a *MsgVpnApiService) CreateMsgVpnReplicatedTopicExecute(r MsgVpnApiApiCrea
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6044,12 +6118,12 @@ func (a *MsgVpnApiService) CreateMsgVpnReplicatedTopicExecute(r MsgVpnApiApiCrea
 }
 
 type MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnRestDeliveryPoint
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnRestDeliveryPoint
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The REST Delivery Point object&#39;s attributes.
@@ -6057,11 +6131,13 @@ func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest) Body(body MsgVpnRestDe
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest {
 	r.select_ = &select_
@@ -6098,7 +6174,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPoint(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest {
 	return MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -6107,10 +6183,10 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPoint(ctx context.Context, ms
 //  @return MsgVpnRestDeliveryPointResponse
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRequest) (*MsgVpnRestDeliveryPointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnRestDeliveryPoint")
@@ -6175,13 +6251,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiCr
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6198,13 +6274,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiCr
 }
 
 type MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	body *MsgVpnRestDeliveryPointQueueBinding
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnRestDeliveryPointQueueBinding
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Queue Binding object&#39;s attributes.
@@ -6212,11 +6288,13 @@ func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest) Body(body 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest {
 	r.select_ = &select_
@@ -6254,9 +6332,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBinding(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest {
 	return MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -6265,10 +6343,10 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBinding(ctx context
 //  @return MsgVpnRestDeliveryPointQueueBindingResponse
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingExecute(r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequest) (*MsgVpnRestDeliveryPointQueueBindingResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnRestDeliveryPointQueueBinding")
@@ -6334,13 +6412,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6357,14 +6435,14 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingExecute(r Ms
 }
 
 type MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	body *MsgVpnRestDeliveryPointQueueBindingRequestHeader
-	opaquePassword *string
-	select_ *[]string
+	queueBindingName      string
+	body                  *MsgVpnRestDeliveryPointQueueBindingRequestHeader
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Request Header object&#39;s attributes.
@@ -6372,11 +6450,13 @@ func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderReques
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	r.select_ = &select_
@@ -6416,11 +6496,11 @@ This has been available since 2.23.
 */
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingRequestHeader(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	return MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
+		queueBindingName:      queueBindingName,
 	}
 }
 
@@ -6428,10 +6508,10 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingRequestHeade
 //  @return MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderExecute(r MsgVpnApiApiCreateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) (*MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnRestDeliveryPointQueueBindingRequestHeader")
@@ -6498,13 +6578,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingRequestHeade
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6521,13 +6601,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointQueueBindingRequestHeade
 }
 
 type MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	body *MsgVpnRestDeliveryPointRestConsumer
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnRestDeliveryPointRestConsumer
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The REST Consumer object&#39;s attributes.
@@ -6535,11 +6615,13 @@ func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest) Body(body 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest {
 	r.select_ = &select_
@@ -6597,9 +6679,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumer(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest {
 	return MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -6608,10 +6690,10 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumer(ctx context
 //  @return MsgVpnRestDeliveryPointRestConsumerResponse
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerExecute(r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerRequest) (*MsgVpnRestDeliveryPointRestConsumerResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnRestDeliveryPointRestConsumer")
@@ -6677,13 +6759,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6700,14 +6782,14 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerExecute(r Ms
 }
 
 type MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	body *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaim
-	opaquePassword *string
-	select_ *[]string
+	restConsumerName      string
+	body                  *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaim
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Claim object&#39;s attributes.
@@ -6715,11 +6797,13 @@ func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimReques
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest {
 	r.select_ = &select_
@@ -6760,11 +6844,11 @@ This has been available since 2.21.
 */
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaim(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest {
 	return MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -6772,10 +6856,10 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClai
 //  @return MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimExecute(r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) (*MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClaim")
@@ -6842,13 +6926,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClai
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -6865,14 +6949,14 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerOauthJwtClai
 }
 
 type MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	body *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName
-	opaquePassword *string
-	select_ *[]string
+	restConsumerName      string
+	body                  *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Trusted Common Name object&#39;s attributes.
@@ -6880,11 +6964,13 @@ func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNam
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest {
 	r.select_ = &select_
@@ -6926,11 +7012,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest {
 	return MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -6939,10 +7025,10 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCo
 // Deprecated
 func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameExecute(r MsgVpnApiApiCreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest) (*MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName")
@@ -7009,13 +7095,13 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCo
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -7032,12 +7118,12 @@ func (a *MsgVpnApiService) CreateMsgVpnRestDeliveryPointRestConsumerTlsTrustedCo
 }
 
 type MsgVpnApiApiCreateMsgVpnSequencedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnSequencedTopic
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnSequencedTopic
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Sequenced Topic object&#39;s attributes.
@@ -7045,11 +7131,13 @@ func (r MsgVpnApiApiCreateMsgVpnSequencedTopicRequest) Body(body MsgVpnSequenced
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnSequencedTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnSequencedTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnSequencedTopicRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnSequencedTopicRequest {
 	r.select_ = &select_
@@ -7086,7 +7174,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) CreateMsgVpnSequencedTopic(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnSequencedTopicRequest {
 	return MsgVpnApiApiCreateMsgVpnSequencedTopicRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -7095,10 +7183,10 @@ func (a *MsgVpnApiService) CreateMsgVpnSequencedTopic(ctx context.Context, msgVp
 //  @return MsgVpnSequencedTopicResponse
 func (a *MsgVpnApiService) CreateMsgVpnSequencedTopicExecute(r MsgVpnApiApiCreateMsgVpnSequencedTopicRequest) (*MsgVpnSequencedTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnSequencedTopicResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnSequencedTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnSequencedTopic")
@@ -7163,13 +7251,13 @@ func (a *MsgVpnApiService) CreateMsgVpnSequencedTopicExecute(r MsgVpnApiApiCreat
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -7186,12 +7274,12 @@ func (a *MsgVpnApiService) CreateMsgVpnSequencedTopicExecute(r MsgVpnApiApiCreat
 }
 
 type MsgVpnApiApiCreateMsgVpnTopicEndpointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnTopicEndpoint
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnTopicEndpoint
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Topic Endpoint object&#39;s attributes.
@@ -7199,11 +7287,13 @@ func (r MsgVpnApiApiCreateMsgVpnTopicEndpointRequest) Body(body MsgVpnTopicEndpo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnTopicEndpointRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnTopicEndpointRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnTopicEndpointRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnTopicEndpointRequest {
 	r.select_ = &select_
@@ -7252,7 +7342,7 @@ This has been available since 2.1.
 func (a *MsgVpnApiService) CreateMsgVpnTopicEndpoint(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnTopicEndpointRequest {
 	return MsgVpnApiApiCreateMsgVpnTopicEndpointRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -7261,10 +7351,10 @@ func (a *MsgVpnApiService) CreateMsgVpnTopicEndpoint(ctx context.Context, msgVpn
 //  @return MsgVpnTopicEndpointResponse
 func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointExecute(r MsgVpnApiApiCreateMsgVpnTopicEndpointRequest) (*MsgVpnTopicEndpointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnTopicEndpoint")
@@ -7329,13 +7419,13 @@ func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointExecute(r MsgVpnApiApiCreate
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -7352,12 +7442,12 @@ func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointExecute(r MsgVpnApiApiCreate
 }
 
 type MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpnTopicEndpointTemplate
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpnTopicEndpointTemplate
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Topic Endpoint Template object&#39;s attributes.
@@ -7365,11 +7455,13 @@ func (r MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest) Body(body MsgVpnTo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest) Select_(select_ []string) MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest {
 	r.select_ = &select_
@@ -7418,7 +7510,7 @@ This has been available since 2.14.
 func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointTemplate(ctx context.Context, msgVpnName string) MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest {
 	return MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -7427,10 +7519,10 @@ func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointTemplate(ctx context.Context
 //  @return MsgVpnTopicEndpointTemplateResponse
 func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiApiCreateMsgVpnTopicEndpointTemplateRequest) (*MsgVpnTopicEndpointTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointTemplateResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.CreateMsgVpnTopicEndpointTemplate")
@@ -7495,13 +7587,13 @@ func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -7518,11 +7610,10 @@ func (a *MsgVpnApiService) CreateMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiDeleteMsgVpnRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *MsgVpnApiService
 	msgVpnName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnExecute(r)
@@ -7546,7 +7637,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) DeleteMsgVpn(ctx context.Context, msgVpnName string) MsgVpnApiApiDeleteMsgVpnRequest {
 	return MsgVpnApiApiDeleteMsgVpnRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -7555,10 +7646,10 @@ func (a *MsgVpnApiService) DeleteMsgVpn(ctx context.Context, msgVpnName string) 
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnExecute(r MsgVpnApiApiDeleteMsgVpnRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpn")
@@ -7612,13 +7703,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnExecute(r MsgVpnApiApiDeleteMsgVpnRequest
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -7635,12 +7726,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnExecute(r MsgVpnApiApiDeleteMsgVpnRequest
 }
 
 type MsgVpnApiApiDeleteMsgVpnAclProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAclProfileRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAclProfileExecute(r)
@@ -7664,9 +7754,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfile(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiDeleteMsgVpnAclProfileRequest {
 	return MsgVpnApiApiDeleteMsgVpnAclProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -7675,10 +7765,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfile(ctx context.Context, msgVpnNam
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileExecute(r MsgVpnApiApiDeleteMsgVpnAclProfileRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAclProfile")
@@ -7733,13 +7823,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileExecute(r MsgVpnApiApiDeleteMsg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -7756,13 +7846,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileExecute(r MsgVpnApiApiDeleteMsg
 }
 
 type MsgVpnApiApiDeleteMsgVpnAclProfileClientConnectExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                           context.Context
+	ApiService                    *MsgVpnApiService
+	msgVpnName                    string
+	aclProfileName                string
 	clientConnectExceptionAddress string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAclProfileClientConnectExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAclProfileClientConnectExceptionExecute(r)
@@ -7787,10 +7876,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileClientConnectException(ctx context.Context, msgVpnName string, aclProfileName string, clientConnectExceptionAddress string) MsgVpnApiApiDeleteMsgVpnAclProfileClientConnectExceptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnAclProfileClientConnectExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                    a,
+		ctx:                           ctx,
+		msgVpnName:                    msgVpnName,
+		aclProfileName:                aclProfileName,
 		clientConnectExceptionAddress: clientConnectExceptionAddress,
 	}
 }
@@ -7799,10 +7888,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileClientConnectException(ctx cont
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileClientConnectExceptionExecute(r MsgVpnApiApiDeleteMsgVpnAclProfileClientConnectExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAclProfileClientConnectException")
@@ -7858,13 +7947,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileClientConnectExceptionExecute(r
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -7881,14 +7970,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileClientConnectExceptionExecute(r
 }
 
 type MsgVpnApiApiDeleteMsgVpnAclProfilePublishExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
-	topicSyntax string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
+	aclProfileName        string
+	topicSyntax           string
 	publishExceptionTopic string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAclProfilePublishExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAclProfilePublishExceptionExecute(r)
@@ -7916,11 +8004,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishException(ctx context.Context, msgVpnName string, aclProfileName string, topicSyntax string, publishExceptionTopic string) MsgVpnApiApiDeleteMsgVpnAclProfilePublishExceptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnAclProfilePublishExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
-		topicSyntax: topicSyntax,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
+		aclProfileName:        aclProfileName,
+		topicSyntax:           topicSyntax,
 		publishExceptionTopic: publishExceptionTopic,
 	}
 }
@@ -7930,10 +8018,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishException(ctx context.Co
 // Deprecated
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishExceptionExecute(r MsgVpnApiApiDeleteMsgVpnAclProfilePublishExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAclProfilePublishException")
@@ -7990,13 +8078,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishExceptionExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8013,14 +8101,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishExceptionExecute(r MsgVp
 }
 
 type MsgVpnApiApiDeleteMsgVpnAclProfilePublishTopicExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                         context.Context
+	ApiService                  *MsgVpnApiService
+	msgVpnName                  string
+	aclProfileName              string
 	publishTopicExceptionSyntax string
-	publishTopicException string
+	publishTopicException       string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAclProfilePublishTopicExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAclProfilePublishTopicExceptionExecute(r)
@@ -8046,12 +8133,12 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishTopicException(ctx context.Context, msgVpnName string, aclProfileName string, publishTopicExceptionSyntax string, publishTopicException string) MsgVpnApiApiDeleteMsgVpnAclProfilePublishTopicExceptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnAclProfilePublishTopicExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                  a,
+		ctx:                         ctx,
+		msgVpnName:                  msgVpnName,
+		aclProfileName:              aclProfileName,
 		publishTopicExceptionSyntax: publishTopicExceptionSyntax,
-		publishTopicException: publishTopicException,
+		publishTopicException:       publishTopicException,
 	}
 }
 
@@ -8059,10 +8146,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishTopicException(ctx conte
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishTopicExceptionExecute(r MsgVpnApiApiDeleteMsgVpnAclProfilePublishTopicExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAclProfilePublishTopicException")
@@ -8119,13 +8206,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishTopicExceptionExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8142,14 +8229,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfilePublishTopicExceptionExecute(r 
 }
 
 type MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
-	topicSyntax string
+	ctx                     context.Context
+	ApiService              *MsgVpnApiService
+	msgVpnName              string
+	aclProfileName          string
+	topicSyntax             string
 	subscribeExceptionTopic string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAclProfileSubscribeExceptionExecute(r)
@@ -8177,11 +8263,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeException(ctx context.Context, msgVpnName string, aclProfileName string, topicSyntax string, subscribeExceptionTopic string) MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeExceptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
-		topicSyntax: topicSyntax,
+		ApiService:              a,
+		ctx:                     ctx,
+		msgVpnName:              msgVpnName,
+		aclProfileName:          aclProfileName,
+		topicSyntax:             topicSyntax,
 		subscribeExceptionTopic: subscribeExceptionTopic,
 	}
 }
@@ -8191,10 +8277,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeException(ctx context.
 // Deprecated
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeExceptionExecute(r MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAclProfileSubscribeException")
@@ -8251,13 +8337,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeExceptionExecute(r Msg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8274,14 +8360,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeExceptionExecute(r Msg
 }
 
 type MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeShareNameExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                               context.Context
+	ApiService                        *MsgVpnApiService
+	msgVpnName                        string
+	aclProfileName                    string
 	subscribeShareNameExceptionSyntax string
-	subscribeShareNameException string
+	subscribeShareNameException       string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeShareNameExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAclProfileSubscribeShareNameExceptionExecute(r)
@@ -8307,12 +8392,12 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeShareNameException(ctx context.Context, msgVpnName string, aclProfileName string, subscribeShareNameExceptionSyntax string, subscribeShareNameException string) MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeShareNameExceptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeShareNameExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                        a,
+		ctx:                               ctx,
+		msgVpnName:                        msgVpnName,
+		aclProfileName:                    aclProfileName,
 		subscribeShareNameExceptionSyntax: subscribeShareNameExceptionSyntax,
-		subscribeShareNameException: subscribeShareNameException,
+		subscribeShareNameException:       subscribeShareNameException,
 	}
 }
 
@@ -8320,10 +8405,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeShareNameException(ctx
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeShareNameExceptionExecute(r MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeShareNameExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAclProfileSubscribeShareNameException")
@@ -8380,13 +8465,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeShareNameExceptionExec
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8403,14 +8488,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeShareNameExceptionExec
 }
 
 type MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeTopicExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                           context.Context
+	ApiService                    *MsgVpnApiService
+	msgVpnName                    string
+	aclProfileName                string
 	subscribeTopicExceptionSyntax string
-	subscribeTopicException string
+	subscribeTopicException       string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeTopicExceptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAclProfileSubscribeTopicExceptionExecute(r)
@@ -8436,12 +8520,12 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeTopicException(ctx context.Context, msgVpnName string, aclProfileName string, subscribeTopicExceptionSyntax string, subscribeTopicException string) MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeTopicExceptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeTopicExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                    a,
+		ctx:                           ctx,
+		msgVpnName:                    msgVpnName,
+		aclProfileName:                aclProfileName,
 		subscribeTopicExceptionSyntax: subscribeTopicExceptionSyntax,
-		subscribeTopicException: subscribeTopicException,
+		subscribeTopicException:       subscribeTopicException,
 	}
 }
 
@@ -8449,10 +8533,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeTopicException(ctx con
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeTopicExceptionExecute(r MsgVpnApiApiDeleteMsgVpnAclProfileSubscribeTopicExceptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAclProfileSubscribeTopicException")
@@ -8509,13 +8593,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeTopicExceptionExecute(
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8532,12 +8616,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnAclProfileSubscribeTopicExceptionExecute(
 }
 
 type MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAuthenticationOauthProfileExecute(r)
@@ -8561,9 +8644,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfile(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileRequest {
 	return MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -8572,10 +8655,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfile(ctx context.Co
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileExecute(r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAuthenticationOauthProfile")
@@ -8630,13 +8713,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8653,13 +8736,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileExecute(r MsgVp
 }
 
 type MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	oauthProfileName string
+	ctx                     context.Context
+	ApiService              *MsgVpnApiService
+	msgVpnName              string
+	oauthProfileName        string
 	clientRequiredClaimName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAuthenticationOauthProfileClientRequiredClaimExecute(r)
@@ -8684,10 +8766,10 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileClientRequiredClaim(ctx context.Context, msgVpnName string, oauthProfileName string, clientRequiredClaimName string) MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest {
 	return MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		oauthProfileName: oauthProfileName,
+		ApiService:              a,
+		ctx:                     ctx,
+		msgVpnName:              msgVpnName,
+		oauthProfileName:        oauthProfileName,
 		clientRequiredClaimName: clientRequiredClaimName,
 	}
 }
@@ -8696,10 +8778,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileClientRequiredC
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileClientRequiredClaimExecute(r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAuthenticationOauthProfileClientRequiredClaim")
@@ -8755,13 +8837,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileClientRequiredC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8778,13 +8860,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileClientRequiredC
 }
 
 type MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	oauthProfileName string
+	ctx                             context.Context
+	ApiService                      *MsgVpnApiService
+	msgVpnName                      string
+	oauthProfileName                string
 	resourceServerRequiredClaimName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimExecute(r)
@@ -8809,10 +8890,10 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaim(ctx context.Context, msgVpnName string, oauthProfileName string, resourceServerRequiredClaimName string) MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest {
 	return MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		oauthProfileName: oauthProfileName,
+		ApiService:                      a,
+		ctx:                             ctx,
+		msgVpnName:                      msgVpnName,
+		oauthProfileName:                oauthProfileName,
 		resourceServerRequiredClaimName: resourceServerRequiredClaimName,
 	}
 }
@@ -8821,10 +8902,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileResourceServerR
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimExecute(r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAuthenticationOauthProfileResourceServerRequiredClaim")
@@ -8880,13 +8961,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileResourceServerR
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -8903,12 +8984,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProfileResourceServerR
 }
 
 type MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProviderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	oauthProviderName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProviderRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAuthenticationOauthProviderExecute(r)
@@ -8934,9 +9014,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProvider(ctx context.Context, msgVpnName string, oauthProviderName string) MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProviderRequest {
 	return MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProviderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		oauthProviderName: oauthProviderName,
 	}
 }
@@ -8946,10 +9026,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProvider(ctx context.C
 // Deprecated
 func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProviderExecute(r MsgVpnApiApiDeleteMsgVpnAuthenticationOauthProviderRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAuthenticationOauthProvider")
@@ -9004,13 +9084,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProviderExecute(r MsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9027,12 +9107,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthenticationOauthProviderExecute(r MsgV
 }
 
 type MsgVpnApiApiDeleteMsgVpnAuthorizationGroupRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                    context.Context
+	ApiService             *MsgVpnApiService
+	msgVpnName             string
 	authorizationGroupName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnAuthorizationGroupRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnAuthorizationGroupExecute(r)
@@ -9056,9 +9135,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnAuthorizationGroup(ctx context.Context, msgVpnName string, authorizationGroupName string) MsgVpnApiApiDeleteMsgVpnAuthorizationGroupRequest {
 	return MsgVpnApiApiDeleteMsgVpnAuthorizationGroupRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:             a,
+		ctx:                    ctx,
+		msgVpnName:             msgVpnName,
 		authorizationGroupName: authorizationGroupName,
 	}
 }
@@ -9067,10 +9146,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthorizationGroup(ctx context.Context, m
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiDeleteMsgVpnAuthorizationGroupRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnAuthorizationGroup")
@@ -9125,13 +9204,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiD
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9148,13 +9227,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiD
 }
 
 type MsgVpnApiApiDeleteMsgVpnBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnBridgeRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnBridgeExecute(r)
@@ -9179,10 +9257,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnBridge(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiDeleteMsgVpnBridgeRequest {
 	return MsgVpnApiApiDeleteMsgVpnBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -9191,10 +9269,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridge(ctx context.Context, msgVpnName st
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnBridgeExecute(r MsgVpnApiApiDeleteMsgVpnBridgeRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnBridge")
@@ -9250,13 +9328,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeExecute(r MsgVpnApiApiDeleteMsgVpnB
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9273,16 +9351,15 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeExecute(r MsgVpnApiApiDeleteMsgVpnB
 }
 
 type MsgVpnApiApiDeleteMsgVpnBridgeRemoteMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
-	remoteMsgVpnName string
-	remoteMsgVpnLocation string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
+	bridgeName            string
+	bridgeVirtualRouter   string
+	remoteMsgVpnName      string
+	remoteMsgVpnLocation  string
 	remoteMsgVpnInterface string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnBridgeRemoteMsgVpnRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnBridgeRemoteMsgVpnExecute(r)
@@ -9310,13 +9387,13 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteMsgVpn(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, remoteMsgVpnName string, remoteMsgVpnLocation string, remoteMsgVpnInterface string) MsgVpnApiApiDeleteMsgVpnBridgeRemoteMsgVpnRequest {
 	return MsgVpnApiApiDeleteMsgVpnBridgeRemoteMsgVpnRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
-		remoteMsgVpnName: remoteMsgVpnName,
-		remoteMsgVpnLocation: remoteMsgVpnLocation,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
+		bridgeName:            bridgeName,
+		bridgeVirtualRouter:   bridgeVirtualRouter,
+		remoteMsgVpnName:      remoteMsgVpnName,
+		remoteMsgVpnLocation:  remoteMsgVpnLocation,
 		remoteMsgVpnInterface: remoteMsgVpnInterface,
 	}
 }
@@ -9325,10 +9402,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteMsgVpn(ctx context.Context, m
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiDeleteMsgVpnBridgeRemoteMsgVpnRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnBridgeRemoteMsgVpn")
@@ -9387,13 +9464,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiD
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9410,14 +9487,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiD
 }
 
 type MsgVpnApiApiDeleteMsgVpnBridgeRemoteSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
+	ctx                     context.Context
+	ApiService              *MsgVpnApiService
+	msgVpnName              string
+	bridgeName              string
+	bridgeVirtualRouter     string
 	remoteSubscriptionTopic string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnBridgeRemoteSubscriptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnBridgeRemoteSubscriptionExecute(r)
@@ -9443,11 +9519,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteSubscription(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, remoteSubscriptionTopic string) MsgVpnApiApiDeleteMsgVpnBridgeRemoteSubscriptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnBridgeRemoteSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
+		ApiService:              a,
+		ctx:                     ctx,
+		msgVpnName:              msgVpnName,
+		bridgeName:              bridgeName,
+		bridgeVirtualRouter:     bridgeVirtualRouter,
 		remoteSubscriptionTopic: remoteSubscriptionTopic,
 	}
 }
@@ -9456,10 +9532,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteSubscription(ctx context.Cont
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnApiApiDeleteMsgVpnBridgeRemoteSubscriptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnBridgeRemoteSubscription")
@@ -9516,13 +9592,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9539,14 +9615,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiDeleteMsgVpnBridgeTlsTrustedCommonNameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
+	ctx                  context.Context
+	ApiService           *MsgVpnApiService
+	msgVpnName           string
+	bridgeName           string
+	bridgeVirtualRouter  string
 	tlsTrustedCommonName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnBridgeTlsTrustedCommonNameRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnBridgeTlsTrustedCommonNameExecute(r)
@@ -9574,11 +9649,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) DeleteMsgVpnBridgeTlsTrustedCommonName(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, tlsTrustedCommonName string) MsgVpnApiApiDeleteMsgVpnBridgeTlsTrustedCommonNameRequest {
 	return MsgVpnApiApiDeleteMsgVpnBridgeTlsTrustedCommonNameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
+		ApiService:           a,
+		ctx:                  ctx,
+		msgVpnName:           msgVpnName,
+		bridgeName:           bridgeName,
+		bridgeVirtualRouter:  bridgeVirtualRouter,
 		tlsTrustedCommonName: tlsTrustedCommonName,
 	}
 }
@@ -9588,10 +9663,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeTlsTrustedCommonName(ctx context.Co
 // Deprecated
 func (a *MsgVpnApiService) DeleteMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVpnApiApiDeleteMsgVpnBridgeTlsTrustedCommonNameRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnBridgeTlsTrustedCommonName")
@@ -9648,13 +9723,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9671,12 +9746,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVp
 }
 
 type MsgVpnApiApiDeleteMsgVpnClientProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	clientProfileName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnClientProfileRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnClientProfileExecute(r)
@@ -9700,9 +9774,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnClientProfile(ctx context.Context, msgVpnName string, clientProfileName string) MsgVpnApiApiDeleteMsgVpnClientProfileRequest {
 	return MsgVpnApiApiDeleteMsgVpnClientProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		clientProfileName: clientProfileName,
 	}
 }
@@ -9711,10 +9785,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnClientProfile(ctx context.Context, msgVpn
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnClientProfileExecute(r MsgVpnApiApiDeleteMsgVpnClientProfileRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnClientProfile")
@@ -9769,13 +9843,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnClientProfileExecute(r MsgVpnApiApiDelete
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9792,12 +9866,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnClientProfileExecute(r MsgVpnApiApiDelete
 }
 
 type MsgVpnApiApiDeleteMsgVpnClientUsernameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	clientUsername string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnClientUsernameRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnClientUsernameExecute(r)
@@ -9821,9 +9894,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnClientUsername(ctx context.Context, msgVpnName string, clientUsername string) MsgVpnApiApiDeleteMsgVpnClientUsernameRequest {
 	return MsgVpnApiApiDeleteMsgVpnClientUsernameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		clientUsername: clientUsername,
 	}
 }
@@ -9832,10 +9905,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnClientUsername(ctx context.Context, msgVp
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnClientUsernameExecute(r MsgVpnApiApiDeleteMsgVpnClientUsernameRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnClientUsername")
@@ -9890,13 +9963,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnClientUsernameExecute(r MsgVpnApiApiDelet
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -9913,12 +9986,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnClientUsernameExecute(r MsgVpnApiApiDelet
 }
 
 type MsgVpnApiApiDeleteMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *MsgVpnApiService
 	msgVpnName string
-	cacheName string
+	cacheName  string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnDistributedCacheRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheExecute(r)
@@ -9943,9 +10015,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiDeleteMsgVpnDistributedCacheRequest {
 	return MsgVpnApiApiDeleteMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -9953,10 +10025,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCache(ctx context.Context, msg
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheExecute(r MsgVpnApiApiDeleteMsgVpnDistributedCacheRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnDistributedCache")
@@ -10011,13 +10083,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheExecute(r MsgVpnApiApiDel
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10034,13 +10106,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheExecute(r MsgVpnApiApiDel
 }
 
 type MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
+	ctx         context.Context
+	ApiService  *MsgVpnApiService
+	msgVpnName  string
+	cacheName   string
 	clusterName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterExecute(r)
@@ -10065,10 +10136,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterRequest {
 	return MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -10077,10 +10148,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheCluster(ctx context.Conte
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterExecute(r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnDistributedCacheCluster")
@@ -10136,13 +10207,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10159,14 +10230,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r)
@@ -10192,11 +10262,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	return MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -10205,10 +10275,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeC
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeCluster")
@@ -10265,13 +10335,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10288,15 +10358,14 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeC
 }
 
 type MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	topicPrefix string
+	topicPrefix     string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r)
@@ -10323,13 +10392,13 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string, topicPrefix string) MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	return MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
-		topicPrefix: topicPrefix,
+		topicPrefix:     topicPrefix,
 	}
 }
 
@@ -10337,10 +10406,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeC
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix")
@@ -10398,13 +10467,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeC
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10421,14 +10490,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterGlobalCachingHomeC
 }
 
 type MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx          context.Context
+	ApiService   *MsgVpnApiService
+	msgVpnName   string
+	cacheName    string
+	clusterName  string
 	instanceName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterInstanceExecute(r)
@@ -10454,11 +10522,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest {
 	return MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -10467,10 +10535,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterInstance(ctx conte
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterInstanceExecute(r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterInstanceRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnDistributedCacheClusterInstance")
@@ -10527,13 +10595,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterInstanceExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10550,14 +10618,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterInstanceExecute(r 
 }
 
 type MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
+	ctx         context.Context
+	ApiService  *MsgVpnApiService
+	msgVpnName  string
+	cacheName   string
 	clusterName string
-	topic string
+	topic       string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDistributedCacheClusterTopicExecute(r)
@@ -10583,12 +10650,12 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterTopic(ctx context.Context, msgVpnName string, cacheName string, clusterName string, topic string) MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest {
 	return MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
-		topic: topic,
+		topic:       topic,
 	}
 }
 
@@ -10596,10 +10663,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterTopic(ctx context.
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterTopicExecute(r MsgVpnApiApiDeleteMsgVpnDistributedCacheClusterTopicRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnDistributedCacheClusterTopic")
@@ -10656,13 +10723,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterTopicExecute(r Msg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10679,12 +10746,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnDistributedCacheClusterTopicExecute(r Msg
 }
 
 type MsgVpnApiApiDeleteMsgVpnDmrBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	remoteNodeName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnDmrBridgeRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnDmrBridgeExecute(r)
@@ -10708,9 +10774,9 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnDmrBridge(ctx context.Context, msgVpnName string, remoteNodeName string) MsgVpnApiApiDeleteMsgVpnDmrBridgeRequest {
 	return MsgVpnApiApiDeleteMsgVpnDmrBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		remoteNodeName: remoteNodeName,
 	}
 }
@@ -10719,10 +10785,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnDmrBridge(ctx context.Context, msgVpnName
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnDmrBridgeExecute(r MsgVpnApiApiDeleteMsgVpnDmrBridgeRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnDmrBridge")
@@ -10777,13 +10843,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnDmrBridgeExecute(r MsgVpnApiApiDeleteMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10800,12 +10866,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnDmrBridgeExecute(r MsgVpnApiApiDeleteMsgV
 }
 
 type MsgVpnApiApiDeleteMsgVpnJndiConnectionFactoryRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	connectionFactoryName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnJndiConnectionFactoryRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnJndiConnectionFactoryExecute(r)
@@ -10829,9 +10894,9 @@ This has been available since 2.2.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnJndiConnectionFactory(ctx context.Context, msgVpnName string, connectionFactoryName string) MsgVpnApiApiDeleteMsgVpnJndiConnectionFactoryRequest {
 	return MsgVpnApiApiDeleteMsgVpnJndiConnectionFactoryRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		connectionFactoryName: connectionFactoryName,
 	}
 }
@@ -10840,10 +10905,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiConnectionFactory(ctx context.Context
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiApiDeleteMsgVpnJndiConnectionFactoryRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnJndiConnectionFactory")
@@ -10898,13 +10963,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -10921,12 +10986,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiDeleteMsgVpnJndiQueueRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *MsgVpnApiService
 	msgVpnName string
-	queueName string
+	queueName  string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnJndiQueueRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnJndiQueueExecute(r)
@@ -10951,9 +11015,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) DeleteMsgVpnJndiQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiDeleteMsgVpnJndiQueueRequest {
 	return MsgVpnApiApiDeleteMsgVpnJndiQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -10961,10 +11025,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiQueue(ctx context.Context, msgVpnName
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnJndiQueueExecute(r MsgVpnApiApiDeleteMsgVpnJndiQueueRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnJndiQueue")
@@ -11019,13 +11083,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiQueueExecute(r MsgVpnApiApiDeleteMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11042,12 +11106,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiQueueExecute(r MsgVpnApiApiDeleteMsgV
 }
 
 type MsgVpnApiApiDeleteMsgVpnJndiTopicRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *MsgVpnApiService
 	msgVpnName string
-	topicName string
+	topicName  string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnJndiTopicRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnJndiTopicExecute(r)
@@ -11072,9 +11135,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) DeleteMsgVpnJndiTopic(ctx context.Context, msgVpnName string, topicName string) MsgVpnApiApiDeleteMsgVpnJndiTopicRequest {
 	return MsgVpnApiApiDeleteMsgVpnJndiTopicRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		topicName: topicName,
+		topicName:  topicName,
 	}
 }
 
@@ -11082,10 +11145,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiTopic(ctx context.Context, msgVpnName
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnJndiTopicExecute(r MsgVpnApiApiDeleteMsgVpnJndiTopicRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnJndiTopic")
@@ -11140,13 +11203,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiTopicExecute(r MsgVpnApiApiDeleteMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11163,12 +11226,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnJndiTopicExecute(r MsgVpnApiApiDeleteMsgV
 }
 
 type MsgVpnApiApiDeleteMsgVpnMqttRetainCacheRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *MsgVpnApiService
 	msgVpnName string
-	cacheName string
+	cacheName  string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnMqttRetainCacheRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnMqttRetainCacheExecute(r)
@@ -11193,9 +11255,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) DeleteMsgVpnMqttRetainCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiDeleteMsgVpnMqttRetainCacheRequest {
 	return MsgVpnApiApiDeleteMsgVpnMqttRetainCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -11203,10 +11265,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttRetainCache(ctx context.Context, msgV
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiDeleteMsgVpnMqttRetainCacheRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnMqttRetainCache")
@@ -11261,13 +11323,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiDele
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11284,13 +11346,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiDele
 }
 
 type MsgVpnApiApiDeleteMsgVpnMqttSessionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnMqttSessionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnMqttSessionExecute(r)
@@ -11315,10 +11376,10 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnMqttSession(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string) MsgVpnApiApiDeleteMsgVpnMqttSessionRequest {
 	return MsgVpnApiApiDeleteMsgVpnMqttSessionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
 	}
 }
@@ -11327,10 +11388,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttSession(ctx context.Context, msgVpnNa
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionExecute(r MsgVpnApiApiDeleteMsgVpnMqttSessionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnMqttSession")
@@ -11386,13 +11447,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionExecute(r MsgVpnApiApiDeleteMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11409,14 +11470,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionExecute(r MsgVpnApiApiDeleteMs
 }
 
 type MsgVpnApiApiDeleteMsgVpnMqttSessionSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	subscriptionTopic string
+	subscriptionTopic        string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnMqttSessionSubscriptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnMqttSessionSubscriptionExecute(r)
@@ -11442,12 +11502,12 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionSubscription(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string, subscriptionTopic string) MsgVpnApiApiDeleteMsgVpnMqttSessionSubscriptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnMqttSessionSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
-		subscriptionTopic: subscriptionTopic,
+		subscriptionTopic:        subscriptionTopic,
 	}
 }
 
@@ -11455,10 +11515,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionSubscription(ctx context.Conte
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionSubscriptionExecute(r MsgVpnApiApiDeleteMsgVpnMqttSessionSubscriptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnMqttSessionSubscription")
@@ -11515,13 +11575,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionSubscriptionExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11538,12 +11598,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnMqttSessionSubscriptionExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiDeleteMsgVpnQueueRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *MsgVpnApiService
 	msgVpnName string
-	queueName string
+	queueName  string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnQueueRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnQueueExecute(r)
@@ -11568,9 +11627,9 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) DeleteMsgVpnQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiDeleteMsgVpnQueueRequest {
 	return MsgVpnApiApiDeleteMsgVpnQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -11578,10 +11637,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueue(ctx context.Context, msgVpnName str
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnQueueExecute(r MsgVpnApiApiDeleteMsgVpnQueueRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnQueue")
@@ -11636,13 +11695,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueExecute(r MsgVpnApiApiDeleteMsgVpnQu
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11659,13 +11718,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueExecute(r MsgVpnApiApiDeleteMsgVpnQu
 }
 
 type MsgVpnApiApiDeleteMsgVpnQueueSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
+	queueName         string
 	subscriptionTopic string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnQueueSubscriptionRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnQueueSubscriptionExecute(r)
@@ -11690,10 +11748,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnQueueSubscription(ctx context.Context, msgVpnName string, queueName string, subscriptionTopic string) MsgVpnApiApiDeleteMsgVpnQueueSubscriptionRequest {
 	return MsgVpnApiApiDeleteMsgVpnQueueSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		queueName: queueName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
+		queueName:         queueName,
 		subscriptionTopic: subscriptionTopic,
 	}
 }
@@ -11702,10 +11760,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueSubscription(ctx context.Context, ms
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiDeleteMsgVpnQueueSubscriptionRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnQueueSubscription")
@@ -11761,13 +11819,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiDe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11784,12 +11842,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiDe
 }
 
 type MsgVpnApiApiDeleteMsgVpnQueueTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	queueTemplateName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnQueueTemplateRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnQueueTemplateExecute(r)
@@ -11813,9 +11870,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnQueueTemplate(ctx context.Context, msgVpnName string, queueTemplateName string) MsgVpnApiApiDeleteMsgVpnQueueTemplateRequest {
 	return MsgVpnApiApiDeleteMsgVpnQueueTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		queueTemplateName: queueTemplateName,
 	}
 }
@@ -11824,10 +11881,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueTemplate(ctx context.Context, msgVpn
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnQueueTemplateExecute(r MsgVpnApiApiDeleteMsgVpnQueueTemplateRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnQueueTemplate")
@@ -11882,13 +11939,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueTemplateExecute(r MsgVpnApiApiDelete
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -11905,12 +11962,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnQueueTemplateExecute(r MsgVpnApiApiDelete
 }
 
 type MsgVpnApiApiDeleteMsgVpnReplayLogRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx           context.Context
+	ApiService    *MsgVpnApiService
+	msgVpnName    string
 	replayLogName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnReplayLogRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnReplayLogExecute(r)
@@ -11934,9 +11990,9 @@ This has been available since 2.10.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnReplayLog(ctx context.Context, msgVpnName string, replayLogName string) MsgVpnApiApiDeleteMsgVpnReplayLogRequest {
 	return MsgVpnApiApiDeleteMsgVpnReplayLogRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:    a,
+		ctx:           ctx,
+		msgVpnName:    msgVpnName,
 		replayLogName: replayLogName,
 	}
 }
@@ -11945,10 +12001,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnReplayLog(ctx context.Context, msgVpnName
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnReplayLogExecute(r MsgVpnApiApiDeleteMsgVpnReplayLogRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnReplayLog")
@@ -12003,13 +12059,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnReplayLogExecute(r MsgVpnApiApiDeleteMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12026,12 +12082,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnReplayLogExecute(r MsgVpnApiApiDeleteMsgV
 }
 
 type MsgVpnApiApiDeleteMsgVpnReplicatedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
 	replicatedTopic string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnReplicatedTopicRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnReplicatedTopicExecute(r)
@@ -12055,9 +12110,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnReplicatedTopic(ctx context.Context, msgVpnName string, replicatedTopic string) MsgVpnApiApiDeleteMsgVpnReplicatedTopicRequest {
 	return MsgVpnApiApiDeleteMsgVpnReplicatedTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
 		replicatedTopic: replicatedTopic,
 	}
 }
@@ -12066,10 +12121,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnReplicatedTopic(ctx context.Context, msgV
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnReplicatedTopicExecute(r MsgVpnApiApiDeleteMsgVpnReplicatedTopicRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnReplicatedTopic")
@@ -12124,13 +12179,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnReplicatedTopicExecute(r MsgVpnApiApiDele
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12147,12 +12202,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnReplicatedTopicExecute(r MsgVpnApiApiDele
 }
 
 type MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnRestDeliveryPointExecute(r)
@@ -12176,9 +12230,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPoint(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRequest {
 	return MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -12187,10 +12241,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPoint(ctx context.Context, ms
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnRestDeliveryPoint")
@@ -12245,13 +12299,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiDe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12268,13 +12322,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiDe
 }
 
 type MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
+	queueBindingName      string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnRestDeliveryPointQueueBindingExecute(r)
@@ -12299,11 +12352,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBinding(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string) MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequest {
 	return MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
+		queueBindingName:      queueBindingName,
 	}
 }
 
@@ -12311,10 +12364,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBinding(ctx context
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingExecute(r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnRestDeliveryPointQueueBinding")
@@ -12370,13 +12423,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12393,14 +12446,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingExecute(r Ms
 }
 
 type MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	headerName string
+	queueBindingName      string
+	headerName            string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnRestDeliveryPointQueueBindingRequestHeaderExecute(r)
@@ -12426,12 +12478,12 @@ This has been available since 2.23.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingRequestHeader(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string, headerName string) MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	return MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
-		headerName: headerName,
+		queueBindingName:      queueBindingName,
+		headerName:            headerName,
 	}
 }
 
@@ -12439,10 +12491,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingRequestHeade
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingRequestHeaderExecute(r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnRestDeliveryPointQueueBindingRequestHeader")
@@ -12499,13 +12551,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingRequestHeade
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12522,13 +12574,12 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointQueueBindingRequestHeade
 }
 
 type MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
+	restConsumerName      string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnRestDeliveryPointRestConsumerExecute(r)
@@ -12553,11 +12604,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumer(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerRequest {
 	return MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -12565,10 +12616,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumer(ctx context
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerExecute(r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnRestDeliveryPointRestConsumer")
@@ -12624,13 +12675,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12647,14 +12698,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerExecute(r Ms
 }
 
 type MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	oauthJwtClaimName string
+	restConsumerName      string
+	oauthJwtClaimName     string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimExecute(r)
@@ -12680,12 +12730,12 @@ This has been available since 2.21.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaim(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string, oauthJwtClaimName string) MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest {
 	return MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
-		oauthJwtClaimName: oauthJwtClaimName,
+		restConsumerName:      restConsumerName,
+		oauthJwtClaimName:     oauthJwtClaimName,
 	}
 }
 
@@ -12693,10 +12743,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClai
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimExecute(r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClaim")
@@ -12753,13 +12803,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClai
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12776,14 +12826,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerOauthJwtClai
 }
 
 type MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	tlsTrustedCommonName string
+	restConsumerName      string
+	tlsTrustedCommonName  string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameExecute(r)
@@ -12811,12 +12860,12 @@ Deprecated
 */
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string, tlsTrustedCommonName string) MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest {
 	return MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
-		tlsTrustedCommonName: tlsTrustedCommonName,
+		restConsumerName:      restConsumerName,
+		tlsTrustedCommonName:  tlsTrustedCommonName,
 	}
 }
 
@@ -12825,10 +12874,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCo
 // Deprecated
 func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameExecute(r MsgVpnApiApiDeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName")
@@ -12885,13 +12934,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCo
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -12908,12 +12957,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnRestDeliveryPointRestConsumerTlsTrustedCo
 }
 
 type MsgVpnApiApiDeleteMsgVpnSequencedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	sequencedTopic string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnSequencedTopicRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnSequencedTopicExecute(r)
@@ -12937,9 +12985,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnSequencedTopic(ctx context.Context, msgVpnName string, sequencedTopic string) MsgVpnApiApiDeleteMsgVpnSequencedTopicRequest {
 	return MsgVpnApiApiDeleteMsgVpnSequencedTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		sequencedTopic: sequencedTopic,
 	}
 }
@@ -12948,10 +12996,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnSequencedTopic(ctx context.Context, msgVp
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnSequencedTopicExecute(r MsgVpnApiApiDeleteMsgVpnSequencedTopicRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnSequencedTopic")
@@ -13006,13 +13054,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnSequencedTopicExecute(r MsgVpnApiApiDelet
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -13029,12 +13077,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnSequencedTopicExecute(r MsgVpnApiApiDelet
 }
 
 type MsgVpnApiApiDeleteMsgVpnTopicEndpointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	topicEndpointName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnTopicEndpointRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnTopicEndpointExecute(r)
@@ -13058,9 +13105,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpoint(ctx context.Context, msgVpnName string, topicEndpointName string) MsgVpnApiApiDeleteMsgVpnTopicEndpointRequest {
 	return MsgVpnApiApiDeleteMsgVpnTopicEndpointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		topicEndpointName: topicEndpointName,
 	}
 }
@@ -13069,10 +13116,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpoint(ctx context.Context, msgVpn
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointExecute(r MsgVpnApiApiDeleteMsgVpnTopicEndpointRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnTopicEndpoint")
@@ -13127,13 +13174,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointExecute(r MsgVpnApiApiDelete
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -13150,12 +13197,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointExecute(r MsgVpnApiApiDelete
 }
 
 type MsgVpnApiApiDeleteMsgVpnTopicEndpointTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                       context.Context
+	ApiService                *MsgVpnApiService
+	msgVpnName                string
 	topicEndpointTemplateName string
 }
-
 
 func (r MsgVpnApiApiDeleteMsgVpnTopicEndpointTemplateRequest) Execute() (*SempMetaOnlyResponse, *http.Response, error) {
 	return r.ApiService.DeleteMsgVpnTopicEndpointTemplateExecute(r)
@@ -13179,9 +13225,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointTemplate(ctx context.Context, msgVpnName string, topicEndpointTemplateName string) MsgVpnApiApiDeleteMsgVpnTopicEndpointTemplateRequest {
 	return MsgVpnApiApiDeleteMsgVpnTopicEndpointTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:                a,
+		ctx:                       ctx,
+		msgVpnName:                msgVpnName,
 		topicEndpointTemplateName: topicEndpointTemplateName,
 	}
 }
@@ -13190,10 +13236,10 @@ func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointTemplate(ctx context.Context
 //  @return SempMetaOnlyResponse
 func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiApiDeleteMsgVpnTopicEndpointTemplateRequest) (*SempMetaOnlyResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *SempMetaOnlyResponse
+		localVarHTTPMethod  = http.MethodDelete
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *SempMetaOnlyResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.DeleteMsgVpnTopicEndpointTemplate")
@@ -13248,13 +13294,13 @@ func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -13271,11 +13317,11 @@ func (a *MsgVpnApiService) DeleteMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiGetMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -13283,6 +13329,7 @@ func (r MsgVpnApiApiGetMsgVpnRequest) OpaquePassword(opaquePassword string) MsgV
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRequest {
 	r.select_ = &select_
@@ -13325,7 +13372,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpn(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnRequest {
 	return MsgVpnApiApiGetMsgVpnRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -13334,10 +13381,10 @@ func (a *MsgVpnApiService) GetMsgVpn(ctx context.Context, msgVpnName string) Msg
 //  @return MsgVpnResponse
 func (a *MsgVpnApiService) GetMsgVpnExecute(r MsgVpnApiApiGetMsgVpnRequest) (*MsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpn")
@@ -13397,13 +13444,13 @@ func (a *MsgVpnApiService) GetMsgVpnExecute(r MsgVpnApiApiGetMsgVpnRequest) (*Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -13420,12 +13467,12 @@ func (a *MsgVpnApiService) GetMsgVpnExecute(r MsgVpnApiApiGetMsgVpnRequest) (*Ms
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -13433,6 +13480,7 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileRequest) OpaquePassword(opaquePassword st
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileRequest {
 	r.select_ = &select_
@@ -13469,9 +13517,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfile(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiGetMsgVpnAclProfileRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -13480,10 +13528,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfile(ctx context.Context, msgVpnName s
 //  @return MsgVpnAclProfileResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfileExecute(r MsgVpnApiApiGetMsgVpnAclProfileRequest) (*MsgVpnAclProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfile")
@@ -13544,13 +13592,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileExecute(r MsgVpnApiApiGetMsgVpnAcl
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -13567,13 +13615,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileExecute(r MsgVpnApiApiGetMsgVpnAcl
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                           context.Context
+	ApiService                    *MsgVpnApiService
+	msgVpnName                    string
+	aclProfileName                string
 	clientConnectExceptionAddress string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword                *string
+	select_                       *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -13581,6 +13629,7 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionRequest) OpaquePass
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionRequest {
 	r.select_ = &select_
@@ -13619,10 +13668,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectException(ctx context.Context, msgVpnName string, aclProfileName string, clientConnectExceptionAddress string) MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                    a,
+		ctx:                           ctx,
+		msgVpnName:                    msgVpnName,
+		aclProfileName:                aclProfileName,
 		clientConnectExceptionAddress: clientConnectExceptionAddress,
 	}
 }
@@ -13631,10 +13680,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectException(ctx context
 //  @return MsgVpnAclProfileClientConnectExceptionResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptionExecute(r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionRequest) (*MsgVpnAclProfileClientConnectExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileClientConnectExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileClientConnectExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileClientConnectException")
@@ -13696,13 +13745,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptionExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -13719,15 +13768,15 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptionExecute(r Ms
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	count *int32
-	cursor *string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -13735,21 +13784,25 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest) Count(cou
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest {
 	r.select_ = &select_
@@ -13787,9 +13840,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptions(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -13798,10 +13851,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptions(ctx contex
 //  @return MsgVpnAclProfileClientConnectExceptionsResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptionsExecute(r MsgVpnApiApiGetMsgVpnAclProfileClientConnectExceptionsRequest) (*MsgVpnAclProfileClientConnectExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileClientConnectExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileClientConnectExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileClientConnectExceptions")
@@ -13871,13 +13924,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptionsExecute(r M
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -13894,14 +13947,14 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileClientConnectExceptionsExecute(r M
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
-	topicSyntax string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
+	aclProfileName        string
+	topicSyntax           string
 	publishExceptionTopic string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -13909,6 +13962,7 @@ func (r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionRequest) OpaquePassword(o
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionRequest {
 	r.select_ = &select_
@@ -13951,11 +14005,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishException(ctx context.Context, msgVpnName string, aclProfileName string, topicSyntax string, publishExceptionTopic string) MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
-		topicSyntax: topicSyntax,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
+		aclProfileName:        aclProfileName,
+		topicSyntax:           topicSyntax,
 		publishExceptionTopic: publishExceptionTopic,
 	}
 }
@@ -13965,10 +14019,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishException(ctx context.Conte
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptionExecute(r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionRequest) (*MsgVpnAclProfilePublishExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfilePublishExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfilePublishExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfilePublishException")
@@ -14031,13 +14085,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptionExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -14054,15 +14108,15 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptionExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	count *int32
-	cursor *string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -14070,21 +14124,25 @@ func (r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest) Count(count int
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest {
 	r.select_ = &select_
@@ -14125,9 +14183,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptions(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -14137,10 +14195,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptions(ctx context.Cont
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptionsExecute(r MsgVpnApiApiGetMsgVpnAclProfilePublishExceptionsRequest) (*MsgVpnAclProfilePublishExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfilePublishExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfilePublishExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfilePublishExceptions")
@@ -14210,13 +14268,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptionsExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -14233,14 +14291,14 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishExceptionsExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                         context.Context
+	ApiService                  *MsgVpnApiService
+	msgVpnName                  string
+	aclProfileName              string
 	publishTopicExceptionSyntax string
-	publishTopicException string
-	opaquePassword *string
-	select_ *[]string
+	publishTopicException       string
+	opaquePassword              *string
+	select_                     *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -14248,6 +14306,7 @@ func (r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionRequest) OpaquePassw
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionRequest {
 	r.select_ = &select_
@@ -14288,12 +14347,12 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicException(ctx context.Context, msgVpnName string, aclProfileName string, publishTopicExceptionSyntax string, publishTopicException string) MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                  a,
+		ctx:                         ctx,
+		msgVpnName:                  msgVpnName,
+		aclProfileName:              aclProfileName,
 		publishTopicExceptionSyntax: publishTopicExceptionSyntax,
-		publishTopicException: publishTopicException,
+		publishTopicException:       publishTopicException,
 	}
 }
 
@@ -14301,10 +14360,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicException(ctx context.
 //  @return MsgVpnAclProfilePublishTopicExceptionResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptionExecute(r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionRequest) (*MsgVpnAclProfilePublishTopicExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfilePublishTopicExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfilePublishTopicExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfilePublishTopicException")
@@ -14367,13 +14426,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptionExecute(r Msg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -14390,15 +14449,15 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptionExecute(r Msg
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	count *int32
-	cursor *string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -14406,21 +14465,25 @@ func (r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest) Count(coun
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest {
 	r.select_ = &select_
@@ -14459,9 +14522,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptions(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -14470,10 +14533,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptions(ctx context
 //  @return MsgVpnAclProfilePublishTopicExceptionsResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptionsExecute(r MsgVpnApiApiGetMsgVpnAclProfilePublishTopicExceptionsRequest) (*MsgVpnAclProfilePublishTopicExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfilePublishTopicExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfilePublishTopicExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfilePublishTopicExceptions")
@@ -14543,13 +14606,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptionsExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -14566,14 +14629,14 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilePublishTopicExceptionsExecute(r Ms
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
-	topicSyntax string
+	ctx                     context.Context
+	ApiService              *MsgVpnApiService
+	msgVpnName              string
+	aclProfileName          string
+	topicSyntax             string
 	subscribeExceptionTopic string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword          *string
+	select_                 *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -14581,6 +14644,7 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionRequest) OpaquePassword
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionRequest {
 	r.select_ = &select_
@@ -14623,11 +14687,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeException(ctx context.Context, msgVpnName string, aclProfileName string, topicSyntax string, subscribeExceptionTopic string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
-		topicSyntax: topicSyntax,
+		ApiService:              a,
+		ctx:                     ctx,
+		msgVpnName:              msgVpnName,
+		aclProfileName:          aclProfileName,
+		topicSyntax:             topicSyntax,
 		subscribeExceptionTopic: subscribeExceptionTopic,
 	}
 }
@@ -14637,10 +14701,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeException(ctx context.Con
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptionExecute(r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionRequest) (*MsgVpnAclProfileSubscribeExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileSubscribeException")
@@ -14703,13 +14767,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptionExecute(r MsgVpn
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -14726,15 +14790,15 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptionExecute(r MsgVpn
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	count *int32
-	cursor *string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -14742,21 +14806,25 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest) Count(count i
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest {
 	r.select_ = &select_
@@ -14797,9 +14865,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptions(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -14809,10 +14877,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptions(ctx context.Co
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptionsExecute(r MsgVpnApiApiGetMsgVpnAclProfileSubscribeExceptionsRequest) (*MsgVpnAclProfileSubscribeExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileSubscribeExceptions")
@@ -14882,13 +14950,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptionsExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -14905,14 +14973,14 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeExceptionsExecute(r MsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                               context.Context
+	ApiService                        *MsgVpnApiService
+	msgVpnName                        string
+	aclProfileName                    string
 	subscribeShareNameExceptionSyntax string
-	subscribeShareNameException string
-	opaquePassword *string
-	select_ *[]string
+	subscribeShareNameException       string
+	opaquePassword                    *string
+	select_                           *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -14920,6 +14988,7 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionRequest) Opaqu
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionRequest {
 	r.select_ = &select_
@@ -14960,12 +15029,12 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameException(ctx context.Context, msgVpnName string, aclProfileName string, subscribeShareNameExceptionSyntax string, subscribeShareNameException string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                        a,
+		ctx:                               ctx,
+		msgVpnName:                        msgVpnName,
+		aclProfileName:                    aclProfileName,
 		subscribeShareNameExceptionSyntax: subscribeShareNameExceptionSyntax,
-		subscribeShareNameException: subscribeShareNameException,
+		subscribeShareNameException:       subscribeShareNameException,
 	}
 }
 
@@ -14973,10 +15042,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameException(ctx co
 //  @return MsgVpnAclProfileSubscribeShareNameExceptionResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptionExecute(r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionRequest) (*MsgVpnAclProfileSubscribeShareNameExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeShareNameExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeShareNameExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileSubscribeShareNameException")
@@ -15039,13 +15108,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptionExecute
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -15062,15 +15131,15 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptionExecute
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	count *int32
-	cursor *string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -15078,21 +15147,25 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest) Coun
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest {
 	r.select_ = &select_
@@ -15131,9 +15204,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptions(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -15142,10 +15215,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptions(ctx c
 //  @return MsgVpnAclProfileSubscribeShareNameExceptionsResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptionsExecute(r MsgVpnApiApiGetMsgVpnAclProfileSubscribeShareNameExceptionsRequest) (*MsgVpnAclProfileSubscribeShareNameExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeShareNameExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeShareNameExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileSubscribeShareNameExceptions")
@@ -15215,13 +15288,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptionsExecut
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -15238,14 +15311,14 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeShareNameExceptionsExecut
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	aclProfileName string
+	ctx                           context.Context
+	ApiService                    *MsgVpnApiService
+	msgVpnName                    string
+	aclProfileName                string
 	subscribeTopicExceptionSyntax string
-	subscribeTopicException string
-	opaquePassword *string
-	select_ *[]string
+	subscribeTopicException       string
+	opaquePassword                *string
+	select_                       *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -15253,6 +15326,7 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionRequest) OpaquePas
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionRequest {
 	r.select_ = &select_
@@ -15293,12 +15367,12 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicException(ctx context.Context, msgVpnName string, aclProfileName string, subscribeTopicExceptionSyntax string, subscribeTopicException string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		aclProfileName: aclProfileName,
+		ApiService:                    a,
+		ctx:                           ctx,
+		msgVpnName:                    msgVpnName,
+		aclProfileName:                aclProfileName,
 		subscribeTopicExceptionSyntax: subscribeTopicExceptionSyntax,
-		subscribeTopicException: subscribeTopicException,
+		subscribeTopicException:       subscribeTopicException,
 	}
 }
 
@@ -15306,10 +15380,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicException(ctx contex
 //  @return MsgVpnAclProfileSubscribeTopicExceptionResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptionExecute(r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionRequest) (*MsgVpnAclProfileSubscribeTopicExceptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeTopicExceptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeTopicExceptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileSubscribeTopicException")
@@ -15372,13 +15446,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptionExecute(r M
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -15395,15 +15469,15 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptionExecute(r M
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	count *int32
-	cursor *string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -15411,21 +15485,25 @@ func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest) Count(co
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest {
 	r.select_ = &select_
@@ -15464,9 +15542,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptions(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -15475,10 +15553,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptions(ctx conte
 //  @return MsgVpnAclProfileSubscribeTopicExceptionsResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptionsExecute(r MsgVpnApiApiGetMsgVpnAclProfileSubscribeTopicExceptionsRequest) (*MsgVpnAclProfileSubscribeTopicExceptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileSubscribeTopicExceptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileSubscribeTopicExceptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfileSubscribeTopicExceptions")
@@ -15548,13 +15626,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptionsExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -15571,14 +15649,14 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfileSubscribeTopicExceptionsExecute(r 
 }
 
 type MsgVpnApiApiGetMsgVpnAclProfilesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -15586,21 +15664,25 @@ func (r MsgVpnApiApiGetMsgVpnAclProfilesRequest) Count(count int32) MsgVpnApiApi
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAclProfilesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAclProfilesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAclProfilesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAclProfilesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAclProfilesRequest {
 	r.select_ = &select_
@@ -15637,7 +15719,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnAclProfiles(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnAclProfilesRequest {
 	return MsgVpnApiApiGetMsgVpnAclProfilesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -15646,10 +15728,10 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfiles(ctx context.Context, msgVpnName 
 //  @return MsgVpnAclProfilesResponse
 func (a *MsgVpnApiService) GetMsgVpnAclProfilesExecute(r MsgVpnApiApiGetMsgVpnAclProfilesRequest) (*MsgVpnAclProfilesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfilesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfilesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAclProfiles")
@@ -15718,13 +15800,13 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilesExecute(r MsgVpnApiApiGetMsgVpnAc
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -15741,12 +15823,12 @@ func (a *MsgVpnApiService) GetMsgVpnAclProfilesExecute(r MsgVpnApiApiGetMsgVpnAc
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -15754,6 +15836,7 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileRequest) OpaquePassword(o
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileRequest {
 	r.select_ = &select_
@@ -15791,9 +15874,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfile(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -15802,10 +15885,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfile(ctx context.Conte
 //  @return MsgVpnAuthenticationOauthProfileResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileRequest) (*MsgVpnAuthenticationOauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProfile")
@@ -15866,13 +15949,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -15889,13 +15972,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	oauthProfileName string
+	ctx                     context.Context
+	ApiService              *MsgVpnApiService
+	msgVpnName              string
+	oauthProfileName        string
 	clientRequiredClaimName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword          *string
+	select_                 *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -15903,6 +15986,7 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimReques
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest {
 	r.select_ = &select_
@@ -15941,10 +16025,10 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClaim(ctx context.Context, msgVpnName string, oauthProfileName string, clientRequiredClaimName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		oauthProfileName: oauthProfileName,
+		ApiService:              a,
+		ctx:                     ctx,
+		msgVpnName:              msgVpnName,
+		oauthProfileName:        oauthProfileName,
 		clientRequiredClaimName: clientRequiredClaimName,
 	}
 }
@@ -15953,10 +16037,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClai
 //  @return MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClaimExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimRequest) (*MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileClientRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProfileClientRequiredClaim")
@@ -16018,13 +16102,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClai
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -16041,15 +16125,15 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClai
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -16057,21 +16141,25 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsReque
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest {
 	r.select_ = &select_
@@ -16109,9 +16197,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClaims(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -16120,10 +16208,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClai
 //  @return MsgVpnAuthenticationOauthProfileClientRequiredClaimsResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClaimsExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileClientRequiredClaimsRequest) (*MsgVpnAuthenticationOauthProfileClientRequiredClaimsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileClientRequiredClaimsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileClientRequiredClaimsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProfileClientRequiredClaims")
@@ -16193,13 +16281,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClai
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -16216,13 +16304,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileClientRequiredClai
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	oauthProfileName string
+	ctx                             context.Context
+	ApiService                      *MsgVpnApiService
+	msgVpnName                      string
+	oauthProfileName                string
 	resourceServerRequiredClaimName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword                  *string
+	select_                         *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -16230,6 +16318,7 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredCla
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest {
 	r.select_ = &select_
@@ -16268,10 +16357,10 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaim(ctx context.Context, msgVpnName string, oauthProfileName string, resourceServerRequiredClaimName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		oauthProfileName: oauthProfileName,
+		ApiService:                      a,
+		ctx:                             ctx,
+		msgVpnName:                      msgVpnName,
+		oauthProfileName:                oauthProfileName,
 		resourceServerRequiredClaimName: resourceServerRequiredClaimName,
 	}
 }
@@ -16280,10 +16369,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequ
 //  @return MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimRequest) (*MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaim")
@@ -16345,13 +16434,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequ
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -16368,15 +16457,15 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequ
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count            *int32
+	cursor           *string
+	opaquePassword   *string
+	where            *[]string
+	select_          *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -16384,21 +16473,25 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredCla
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest {
 	r.select_ = &select_
@@ -16436,9 +16529,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaims(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -16447,10 +16540,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequ
 //  @return MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsRequest) (*MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileResourceServerRequiredClaimsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProfileResourceServerRequiredClaims")
@@ -16520,13 +16613,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequ
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -16543,14 +16636,14 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfileResourceServerRequ
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -16558,21 +16651,25 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest) Count(count int
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest {
 	r.select_ = &select_
@@ -16610,7 +16707,7 @@ This has been available since 2.25.
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfiles(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -16619,10 +16716,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfiles(ctx context.Cont
 //  @return MsgVpnAuthenticationOauthProfilesResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfilesExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProfilesRequest) (*MsgVpnAuthenticationOauthProfilesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfilesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfilesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProfiles")
@@ -16691,13 +16788,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfilesExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -16714,12 +16811,12 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProfilesExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProviderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	oauthProviderName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -16727,6 +16824,7 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProviderRequest) OpaquePassword(
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProviderRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProviderRequest {
 	r.select_ = &select_
@@ -16785,9 +16883,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProvider(ctx context.Context, msgVpnName string, oauthProviderName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProviderRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProviderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		oauthProviderName: oauthProviderName,
 	}
 }
@@ -16797,10 +16895,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProvider(ctx context.Cont
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProviderExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProviderRequest) (*MsgVpnAuthenticationOauthProviderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProviderResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProviderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProvider")
@@ -16861,13 +16959,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProviderExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -16884,14 +16982,14 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProviderExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -16899,21 +16997,25 @@ func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest) Count(count in
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest {
 	r.select_ = &select_
@@ -16972,7 +17074,7 @@ Deprecated
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProviders(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest {
 	return MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -16982,10 +17084,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProviders(ctx context.Con
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProvidersExecute(r MsgVpnApiApiGetMsgVpnAuthenticationOauthProvidersRequest) (*MsgVpnAuthenticationOauthProvidersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProvidersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProvidersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthenticationOauthProviders")
@@ -17054,13 +17156,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProvidersExecute(r MsgVpn
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -17077,12 +17179,12 @@ func (a *MsgVpnApiService) GetMsgVpnAuthenticationOauthProvidersExecute(r MsgVpn
 }
 
 type MsgVpnApiApiGetMsgVpnAuthorizationGroupRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                    context.Context
+	ApiService             *MsgVpnApiService
+	msgVpnName             string
 	authorizationGroupName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword         *string
+	select_                *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -17090,6 +17192,7 @@ func (r MsgVpnApiApiGetMsgVpnAuthorizationGroupRequest) OpaquePassword(opaquePas
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthorizationGroupRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthorizationGroupRequest {
 	r.select_ = &select_
@@ -17128,9 +17231,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroup(ctx context.Context, msgVpnName string, authorizationGroupName string) MsgVpnApiApiGetMsgVpnAuthorizationGroupRequest {
 	return MsgVpnApiApiGetMsgVpnAuthorizationGroupRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:             a,
+		ctx:                    ctx,
+		msgVpnName:             msgVpnName,
 		authorizationGroupName: authorizationGroupName,
 	}
 }
@@ -17139,10 +17242,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroup(ctx context.Context, msgV
 //  @return MsgVpnAuthorizationGroupResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiGetMsgVpnAuthorizationGroupRequest) (*MsgVpnAuthorizationGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthorizationGroupResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthorizationGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthorizationGroup")
@@ -17203,13 +17306,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiGetM
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -17226,14 +17329,14 @@ func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiGetM
 }
 
 type MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -17241,21 +17344,25 @@ func (r MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest) Count(count int32) MsgV
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest {
 	r.select_ = &select_
@@ -17294,7 +17401,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroups(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest {
 	return MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -17303,10 +17410,10 @@ func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroups(ctx context.Context, msg
 //  @return MsgVpnAuthorizationGroupsResponse
 func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroupsExecute(r MsgVpnApiApiGetMsgVpnAuthorizationGroupsRequest) (*MsgVpnAuthorizationGroupsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthorizationGroupsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthorizationGroupsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnAuthorizationGroups")
@@ -17375,13 +17482,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroupsExecute(r MsgVpnApiApiGet
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -17398,13 +17505,13 @@ func (a *MsgVpnApiService) GetMsgVpnAuthorizationGroupsExecute(r MsgVpnApiApiGet
 }
 
 type MsgVpnApiApiGetMsgVpnBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword      *string
+	select_             *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -17412,6 +17519,7 @@ func (r MsgVpnApiApiGetMsgVpnBridgeRequest) OpaquePassword(opaquePassword string
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgeRequest {
 	r.select_ = &select_
@@ -17453,10 +17561,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnBridge(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiGetMsgVpnBridgeRequest {
 	return MsgVpnApiApiGetMsgVpnBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -17465,10 +17573,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridge(ctx context.Context, msgVpnName strin
 //  @return MsgVpnBridgeResponse
 func (a *MsgVpnApiService) GetMsgVpnBridgeExecute(r MsgVpnApiApiGetMsgVpnBridgeRequest) (*MsgVpnBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridge")
@@ -17530,13 +17638,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeExecute(r MsgVpnApiApiGetMsgVpnBridgeR
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -17553,16 +17661,16 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeExecute(r MsgVpnApiApiGetMsgVpnBridgeR
 }
 
 type MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
-	remoteMsgVpnName string
-	remoteMsgVpnLocation string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
+	bridgeName            string
+	bridgeVirtualRouter   string
+	remoteMsgVpnName      string
+	remoteMsgVpnLocation  string
 	remoteMsgVpnInterface string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -17570,6 +17678,7 @@ func (r MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnRequest) OpaquePassword(opaquePas
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnRequest {
 	r.select_ = &select_
@@ -17615,13 +17724,13 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpn(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, remoteMsgVpnName string, remoteMsgVpnLocation string, remoteMsgVpnInterface string) MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnRequest {
 	return MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
-		remoteMsgVpnName: remoteMsgVpnName,
-		remoteMsgVpnLocation: remoteMsgVpnLocation,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
+		bridgeName:            bridgeName,
+		bridgeVirtualRouter:   bridgeVirtualRouter,
+		remoteMsgVpnName:      remoteMsgVpnName,
+		remoteMsgVpnLocation:  remoteMsgVpnLocation,
 		remoteMsgVpnInterface: remoteMsgVpnInterface,
 	}
 }
@@ -17630,10 +17739,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpn(ctx context.Context, msgV
 //  @return MsgVpnBridgeRemoteMsgVpnResponse
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnRequest) (*MsgVpnBridgeRemoteMsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteMsgVpnResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteMsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridgeRemoteMsgVpn")
@@ -17698,13 +17807,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiGetM
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -17721,14 +17830,14 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiGetM
 }
 
 type MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	opaquePassword      *string
+	where               *[]string
+	select_             *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -17736,11 +17845,13 @@ func (r MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest) OpaquePassword(opaquePa
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest {
 	r.select_ = &select_
@@ -17783,10 +17894,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpns(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest {
 	return MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -17795,10 +17906,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpns(ctx context.Context, msg
 //  @return MsgVpnBridgeRemoteMsgVpnsResponse
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpnsExecute(r MsgVpnApiApiGetMsgVpnBridgeRemoteMsgVpnsRequest) (*MsgVpnBridgeRemoteMsgVpnsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteMsgVpnsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteMsgVpnsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridgeRemoteMsgVpns")
@@ -17863,13 +17974,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpnsExecute(r MsgVpnApiApiGet
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -17886,14 +17997,14 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteMsgVpnsExecute(r MsgVpnApiApiGet
 }
 
 type MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
+	ctx                     context.Context
+	ApiService              *MsgVpnApiService
+	msgVpnName              string
+	bridgeName              string
+	bridgeVirtualRouter     string
 	remoteSubscriptionTopic string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword          *string
+	select_                 *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -17901,6 +18012,7 @@ func (r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionRequest) OpaquePassword(opa
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionRequest {
 	r.select_ = &select_
@@ -17941,11 +18053,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscription(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, remoteSubscriptionTopic string) MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionRequest {
 	return MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
+		ApiService:              a,
+		ctx:                     ctx,
+		msgVpnName:              msgVpnName,
+		bridgeName:              bridgeName,
+		bridgeVirtualRouter:     bridgeVirtualRouter,
 		remoteSubscriptionTopic: remoteSubscriptionTopic,
 	}
 }
@@ -17954,10 +18066,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscription(ctx context.Context
 //  @return MsgVpnBridgeRemoteSubscriptionResponse
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionRequest) (*MsgVpnBridgeRemoteSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteSubscriptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridgeRemoteSubscription")
@@ -18020,13 +18132,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -18043,16 +18155,16 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptionExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count               *int32
+	cursor              *string
+	opaquePassword      *string
+	where               *[]string
+	select_             *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -18060,21 +18172,25 @@ func (r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest) Count(count int32
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest {
 	r.select_ = &select_
@@ -18114,10 +18230,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptions(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest {
 	return MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -18126,10 +18242,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptions(ctx context.Contex
 //  @return MsgVpnBridgeRemoteSubscriptionsResponse
 func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptionsExecute(r MsgVpnApiApiGetMsgVpnBridgeRemoteSubscriptionsRequest) (*MsgVpnBridgeRemoteSubscriptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteSubscriptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteSubscriptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridgeRemoteSubscriptions")
@@ -18200,13 +18316,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptionsExecute(r MsgVpnApi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -18223,14 +18339,14 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeRemoteSubscriptionsExecute(r MsgVpnApi
 }
 
 type MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
+	ctx                  context.Context
+	ApiService           *MsgVpnApiService
+	msgVpnName           string
+	bridgeName           string
+	bridgeVirtualRouter  string
 	tlsTrustedCommonName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword       *string
+	select_              *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -18238,6 +18354,7 @@ func (r MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNameRequest) OpaquePassword(o
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNameRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNameRequest {
 	r.select_ = &select_
@@ -18280,11 +18397,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonName(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, tlsTrustedCommonName string) MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNameRequest {
 	return MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
+		ApiService:           a,
+		ctx:                  ctx,
+		msgVpnName:           msgVpnName,
+		bridgeName:           bridgeName,
+		bridgeVirtualRouter:  bridgeVirtualRouter,
 		tlsTrustedCommonName: tlsTrustedCommonName,
 	}
 }
@@ -18294,10 +18411,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonName(ctx context.Conte
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNameRequest) (*MsgVpnBridgeTlsTrustedCommonNameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeTlsTrustedCommonNameResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeTlsTrustedCommonNameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridgeTlsTrustedCommonName")
@@ -18360,13 +18477,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -18383,14 +18500,14 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNameExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	opaquePassword      *string
+	where               *[]string
+	select_             *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -18398,11 +18515,13 @@ func (r MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest) OpaquePassword(
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest {
 	r.select_ = &select_
@@ -18444,10 +18563,10 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNames(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest {
 	return MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -18457,10 +18576,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNames(ctx context.Cont
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNamesExecute(r MsgVpnApiApiGetMsgVpnBridgeTlsTrustedCommonNamesRequest) (*MsgVpnBridgeTlsTrustedCommonNamesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeTlsTrustedCommonNamesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeTlsTrustedCommonNamesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridgeTlsTrustedCommonNames")
@@ -18525,13 +18644,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNamesExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -18548,14 +18667,14 @@ func (a *MsgVpnApiService) GetMsgVpnBridgeTlsTrustedCommonNamesExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiGetMsgVpnBridgesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -18563,21 +18682,25 @@ func (r MsgVpnApiApiGetMsgVpnBridgesRequest) Count(count int32) MsgVpnApiApiGetM
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnBridgesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnBridgesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnBridgesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnBridgesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnBridgesRequest {
 	r.select_ = &select_
@@ -18618,7 +18741,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnBridges(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnBridgesRequest {
 	return MsgVpnApiApiGetMsgVpnBridgesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -18627,10 +18750,10 @@ func (a *MsgVpnApiService) GetMsgVpnBridges(ctx context.Context, msgVpnName stri
 //  @return MsgVpnBridgesResponse
 func (a *MsgVpnApiService) GetMsgVpnBridgesExecute(r MsgVpnApiApiGetMsgVpnBridgesRequest) (*MsgVpnBridgesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnBridges")
@@ -18699,13 +18822,13 @@ func (a *MsgVpnApiService) GetMsgVpnBridgesExecute(r MsgVpnApiApiGetMsgVpnBridge
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -18722,12 +18845,12 @@ func (a *MsgVpnApiService) GetMsgVpnBridgesExecute(r MsgVpnApiApiGetMsgVpnBridge
 }
 
 type MsgVpnApiApiGetMsgVpnClientProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	clientProfileName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -18735,6 +18858,7 @@ func (r MsgVpnApiApiGetMsgVpnClientProfileRequest) OpaquePassword(opaquePassword
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientProfileRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnClientProfileRequest {
 	r.select_ = &select_
@@ -18774,9 +18898,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnClientProfile(ctx context.Context, msgVpnName string, clientProfileName string) MsgVpnApiApiGetMsgVpnClientProfileRequest {
 	return MsgVpnApiApiGetMsgVpnClientProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		clientProfileName: clientProfileName,
 	}
 }
@@ -18785,10 +18909,10 @@ func (a *MsgVpnApiService) GetMsgVpnClientProfile(ctx context.Context, msgVpnNam
 //  @return MsgVpnClientProfileResponse
 func (a *MsgVpnApiService) GetMsgVpnClientProfileExecute(r MsgVpnApiApiGetMsgVpnClientProfileRequest) (*MsgVpnClientProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientProfileResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnClientProfile")
@@ -18849,13 +18973,13 @@ func (a *MsgVpnApiService) GetMsgVpnClientProfileExecute(r MsgVpnApiApiGetMsgVpn
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -18872,14 +18996,14 @@ func (a *MsgVpnApiService) GetMsgVpnClientProfileExecute(r MsgVpnApiApiGetMsgVpn
 }
 
 type MsgVpnApiApiGetMsgVpnClientProfilesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -18887,21 +19011,25 @@ func (r MsgVpnApiApiGetMsgVpnClientProfilesRequest) Count(count int32) MsgVpnApi
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientProfilesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnClientProfilesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientProfilesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnClientProfilesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientProfilesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnClientProfilesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientProfilesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnClientProfilesRequest {
 	r.select_ = &select_
@@ -18941,7 +19069,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnClientProfiles(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnClientProfilesRequest {
 	return MsgVpnApiApiGetMsgVpnClientProfilesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -18950,10 +19078,10 @@ func (a *MsgVpnApiService) GetMsgVpnClientProfiles(ctx context.Context, msgVpnNa
 //  @return MsgVpnClientProfilesResponse
 func (a *MsgVpnApiService) GetMsgVpnClientProfilesExecute(r MsgVpnApiApiGetMsgVpnClientProfilesRequest) (*MsgVpnClientProfilesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientProfilesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientProfilesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnClientProfiles")
@@ -19022,13 +19150,13 @@ func (a *MsgVpnApiService) GetMsgVpnClientProfilesExecute(r MsgVpnApiApiGetMsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -19045,12 +19173,12 @@ func (a *MsgVpnApiService) GetMsgVpnClientProfilesExecute(r MsgVpnApiApiGetMsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnClientUsernameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	clientUsername string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -19058,6 +19186,7 @@ func (r MsgVpnApiApiGetMsgVpnClientUsernameRequest) OpaquePassword(opaquePasswor
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientUsernameRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnClientUsernameRequest {
 	r.select_ = &select_
@@ -19095,9 +19224,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnClientUsername(ctx context.Context, msgVpnName string, clientUsername string) MsgVpnApiApiGetMsgVpnClientUsernameRequest {
 	return MsgVpnApiApiGetMsgVpnClientUsernameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		clientUsername: clientUsername,
 	}
 }
@@ -19106,10 +19235,10 @@ func (a *MsgVpnApiService) GetMsgVpnClientUsername(ctx context.Context, msgVpnNa
 //  @return MsgVpnClientUsernameResponse
 func (a *MsgVpnApiService) GetMsgVpnClientUsernameExecute(r MsgVpnApiApiGetMsgVpnClientUsernameRequest) (*MsgVpnClientUsernameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientUsernameResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientUsernameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnClientUsername")
@@ -19170,13 +19299,13 @@ func (a *MsgVpnApiService) GetMsgVpnClientUsernameExecute(r MsgVpnApiApiGetMsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -19193,14 +19322,14 @@ func (a *MsgVpnApiService) GetMsgVpnClientUsernameExecute(r MsgVpnApiApiGetMsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnClientUsernamesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -19208,21 +19337,25 @@ func (r MsgVpnApiApiGetMsgVpnClientUsernamesRequest) Count(count int32) MsgVpnAp
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientUsernamesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnClientUsernamesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientUsernamesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnClientUsernamesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientUsernamesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnClientUsernamesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnClientUsernamesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnClientUsernamesRequest {
 	r.select_ = &select_
@@ -19260,7 +19393,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnClientUsernames(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnClientUsernamesRequest {
 	return MsgVpnApiApiGetMsgVpnClientUsernamesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -19269,10 +19402,10 @@ func (a *MsgVpnApiService) GetMsgVpnClientUsernames(ctx context.Context, msgVpnN
 //  @return MsgVpnClientUsernamesResponse
 func (a *MsgVpnApiService) GetMsgVpnClientUsernamesExecute(r MsgVpnApiApiGetMsgVpnClientUsernamesRequest) (*MsgVpnClientUsernamesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientUsernamesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientUsernamesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnClientUsernames")
@@ -19341,13 +19474,13 @@ func (a *MsgVpnApiService) GetMsgVpnClientUsernamesExecute(r MsgVpnApiApiGetMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -19364,12 +19497,12 @@ func (a *MsgVpnApiService) GetMsgVpnClientUsernamesExecute(r MsgVpnApiApiGetMsgV
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -19377,6 +19510,7 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheRequest) OpaquePassword(opaquePassw
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -19414,9 +19548,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) GetMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiGetMsgVpnDistributedCacheRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -19424,10 +19558,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCache(ctx context.Context, msgVpn
 //  @return MsgVpnDistributedCacheResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCache")
@@ -19488,13 +19622,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheExecute(r MsgVpnApiApiGetMsg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -19511,13 +19645,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheExecute(r MsgVpnApiApiGetMsg
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -19525,6 +19659,7 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterRequest) OpaquePassword(opaq
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -19563,10 +19698,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -19575,10 +19710,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheCluster(ctx context.Context,
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheCluster")
@@ -19640,13 +19775,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterExecute(r MsgVpnApiAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -19663,14 +19798,14 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterExecute(r MsgVpnApiAp
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -19678,6 +19813,7 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequ
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	r.select_ = &select_
@@ -19718,11 +19854,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -19731,10 +19867,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeCluster")
@@ -19797,13 +19933,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -19820,15 +19956,15 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	topicPrefix string
-	opaquePassword *string
-	select_ *[]string
+	topicPrefix     string
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -19836,6 +19972,7 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopi
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	r.select_ = &select_
@@ -19878,13 +20015,13 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string, topicPrefix string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
-		topicPrefix: topicPrefix,
+		topicPrefix:     topicPrefix,
 	}
 }
 
@@ -19892,10 +20029,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefix")
@@ -19959,13 +20096,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -19982,17 +20119,17 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
+	cacheName       string
+	clusterName     string
 	homeClusterName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count           *int32
+	cursor          *string
+	opaquePassword  *string
+	where           *[]string
+	select_         *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -20000,21 +20137,25 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopi
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	r.select_ = &select_
@@ -20056,11 +20197,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixes(ctx context.Context, msgVpnName string, cacheName string, clusterName string, homeClusterName string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
+		cacheName:       cacheName,
+		clusterName:     clusterName,
 		homeClusterName: homeClusterName,
 	}
 }
@@ -20069,10 +20210,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusterTopicPrefixes")
@@ -20144,13 +20285,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -20167,16 +20308,16 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -20184,21 +20325,25 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersReq
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) Where(where []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	r.select_ = &select_
@@ -20238,10 +20383,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusters(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -20250,10 +20395,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 //  @return MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterGlobalCachingHomeClustersRequest) (*MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterGlobalCachingHomeClustersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterGlobalCachingHomeClusters")
@@ -20324,13 +20469,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -20347,14 +20492,14 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterGlobalCachingHomeClus
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	instanceName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	instanceName   string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -20362,6 +20507,7 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstanceRequest) OpaquePassw
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -20402,11 +20548,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstanceRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -20415,10 +20561,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstance(ctx context.
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstanceExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterInstance")
@@ -20481,13 +20627,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstanceExecute(r Msg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -20504,16 +20650,16 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstanceExecute(r Msg
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -20521,21 +20667,25 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) Count(coun
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	r.select_ = &select_
@@ -20575,10 +20725,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstances(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -20587,10 +20737,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstances(ctx context
 //  @return MsgVpnDistributedCacheClusterInstancesResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstancesExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterInstancesRequest) (*MsgVpnDistributedCacheClusterInstancesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstancesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstancesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterInstances")
@@ -20661,13 +20811,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstancesExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -20684,14 +20834,14 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterInstancesExecute(r Ms
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	topic string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	topic          string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -20699,6 +20849,7 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicRequest) OpaquePassword
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicRequest {
 	r.select_ = &select_
@@ -20739,12 +20890,12 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopic(ctx context.Context, msgVpnName string, cacheName string, clusterName string, topic string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
-		topic: topic,
+		topic:       topic,
 	}
 }
 
@@ -20752,10 +20903,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopic(ctx context.Con
 //  @return MsgVpnDistributedCacheClusterTopicResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopicExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicRequest) (*MsgVpnDistributedCacheClusterTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterTopicResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterTopic")
@@ -20818,13 +20969,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopicExecute(r MsgVpn
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -20841,16 +20992,16 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopicExecute(r MsgVpn
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -20858,21 +21009,25 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Count(count i
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	r.select_ = &select_
@@ -20912,10 +21067,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopics(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -20924,10 +21079,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopics(ctx context.Co
 //  @return MsgVpnDistributedCacheClusterTopicsResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopicsExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClusterTopicsRequest) (*MsgVpnDistributedCacheClusterTopicsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterTopicsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterTopicsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusterTopics")
@@ -20998,13 +21153,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopicsExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -21021,15 +21176,15 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusterTopicsExecute(r MsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -21037,21 +21192,25 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest) Count(count int32)
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest) Where(where []string) MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest {
 	r.select_ = &select_
@@ -21090,9 +21249,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusters(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -21100,10 +21259,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClusters(ctx context.Context
 //  @return MsgVpnDistributedCacheClustersResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClustersExecute(r MsgVpnApiApiGetMsgVpnDistributedCacheClustersRequest) (*MsgVpnDistributedCacheClustersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClustersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClustersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCacheClusters")
@@ -21173,13 +21332,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClustersExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -21196,14 +21355,14 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCacheClustersExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiGetMsgVpnDistributedCachesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -21211,21 +21370,25 @@ func (r MsgVpnApiApiGetMsgVpnDistributedCachesRequest) Count(count int32) MsgVpn
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCachesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnDistributedCachesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCachesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnDistributedCachesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCachesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnDistributedCachesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDistributedCachesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDistributedCachesRequest {
 	r.select_ = &select_
@@ -21262,7 +21425,7 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) GetMsgVpnDistributedCaches(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnDistributedCachesRequest {
 	return MsgVpnApiApiGetMsgVpnDistributedCachesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -21271,10 +21434,10 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCaches(ctx context.Context, msgVp
 //  @return MsgVpnDistributedCachesResponse
 func (a *MsgVpnApiService) GetMsgVpnDistributedCachesExecute(r MsgVpnApiApiGetMsgVpnDistributedCachesRequest) (*MsgVpnDistributedCachesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCachesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCachesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDistributedCaches")
@@ -21343,13 +21506,13 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCachesExecute(r MsgVpnApiApiGetMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -21366,12 +21529,12 @@ func (a *MsgVpnApiService) GetMsgVpnDistributedCachesExecute(r MsgVpnApiApiGetMs
 }
 
 type MsgVpnApiApiGetMsgVpnDmrBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	remoteNodeName string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -21379,6 +21542,7 @@ func (r MsgVpnApiApiGetMsgVpnDmrBridgeRequest) OpaquePassword(opaquePassword str
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDmrBridgeRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDmrBridgeRequest {
 	r.select_ = &select_
@@ -21415,9 +21579,9 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) GetMsgVpnDmrBridge(ctx context.Context, msgVpnName string, remoteNodeName string) MsgVpnApiApiGetMsgVpnDmrBridgeRequest {
 	return MsgVpnApiApiGetMsgVpnDmrBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		remoteNodeName: remoteNodeName,
 	}
 }
@@ -21426,10 +21590,10 @@ func (a *MsgVpnApiService) GetMsgVpnDmrBridge(ctx context.Context, msgVpnName st
 //  @return MsgVpnDmrBridgeResponse
 func (a *MsgVpnApiService) GetMsgVpnDmrBridgeExecute(r MsgVpnApiApiGetMsgVpnDmrBridgeRequest) (*MsgVpnDmrBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDmrBridgeResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDmrBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDmrBridge")
@@ -21490,13 +21654,13 @@ func (a *MsgVpnApiService) GetMsgVpnDmrBridgeExecute(r MsgVpnApiApiGetMsgVpnDmrB
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -21513,14 +21677,14 @@ func (a *MsgVpnApiService) GetMsgVpnDmrBridgeExecute(r MsgVpnApiApiGetMsgVpnDmrB
 }
 
 type MsgVpnApiApiGetMsgVpnDmrBridgesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -21528,21 +21692,25 @@ func (r MsgVpnApiApiGetMsgVpnDmrBridgesRequest) Count(count int32) MsgVpnApiApiG
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDmrBridgesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnDmrBridgesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDmrBridgesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnDmrBridgesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDmrBridgesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnDmrBridgesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnDmrBridgesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnDmrBridgesRequest {
 	r.select_ = &select_
@@ -21579,7 +21747,7 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) GetMsgVpnDmrBridges(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnDmrBridgesRequest {
 	return MsgVpnApiApiGetMsgVpnDmrBridgesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -21588,10 +21756,10 @@ func (a *MsgVpnApiService) GetMsgVpnDmrBridges(ctx context.Context, msgVpnName s
 //  @return MsgVpnDmrBridgesResponse
 func (a *MsgVpnApiService) GetMsgVpnDmrBridgesExecute(r MsgVpnApiApiGetMsgVpnDmrBridgesRequest) (*MsgVpnDmrBridgesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDmrBridgesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDmrBridgesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnDmrBridges")
@@ -21660,13 +21828,13 @@ func (a *MsgVpnApiService) GetMsgVpnDmrBridgesExecute(r MsgVpnApiApiGetMsgVpnDmr
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -21683,14 +21851,14 @@ func (a *MsgVpnApiService) GetMsgVpnDmrBridgesExecute(r MsgVpnApiApiGetMsgVpnDmr
 }
 
 type MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -21698,21 +21866,25 @@ func (r MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest) Count(count int32) 
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest {
 	r.select_ = &select_
@@ -21749,7 +21921,7 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactories(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest {
 	return MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -21758,10 +21930,10 @@ func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactories(ctx context.Context,
 //  @return MsgVpnJndiConnectionFactoriesResponse
 func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactoriesExecute(r MsgVpnApiApiGetMsgVpnJndiConnectionFactoriesRequest) (*MsgVpnJndiConnectionFactoriesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiConnectionFactoriesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiConnectionFactoriesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnJndiConnectionFactories")
@@ -21830,13 +22002,13 @@ func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactoriesExecute(r MsgVpnApiAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -21853,12 +22025,12 @@ func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactoriesExecute(r MsgVpnApiAp
 }
 
 type MsgVpnApiApiGetMsgVpnJndiConnectionFactoryRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	connectionFactoryName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -21866,6 +22038,7 @@ func (r MsgVpnApiApiGetMsgVpnJndiConnectionFactoryRequest) OpaquePassword(opaque
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiConnectionFactoryRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnJndiConnectionFactoryRequest {
 	r.select_ = &select_
@@ -21902,9 +22075,9 @@ This has been available since 2.2.
 */
 func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactory(ctx context.Context, msgVpnName string, connectionFactoryName string) MsgVpnApiApiGetMsgVpnJndiConnectionFactoryRequest {
 	return MsgVpnApiApiGetMsgVpnJndiConnectionFactoryRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		connectionFactoryName: connectionFactoryName,
 	}
 }
@@ -21913,10 +22086,10 @@ func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactory(ctx context.Context, m
 //  @return MsgVpnJndiConnectionFactoryResponse
 func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiApiGetMsgVpnJndiConnectionFactoryRequest) (*MsgVpnJndiConnectionFactoryResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiConnectionFactoryResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiConnectionFactoryResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnJndiConnectionFactory")
@@ -21977,13 +22150,13 @@ func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiApiG
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -22000,12 +22173,12 @@ func (a *MsgVpnApiService) GetMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiApiG
 }
 
 type MsgVpnApiApiGetMsgVpnJndiQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -22013,6 +22186,7 @@ func (r MsgVpnApiApiGetMsgVpnJndiQueueRequest) OpaquePassword(opaquePassword str
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiQueueRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnJndiQueueRequest {
 	r.select_ = &select_
@@ -22050,9 +22224,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) GetMsgVpnJndiQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiGetMsgVpnJndiQueueRequest {
 	return MsgVpnApiApiGetMsgVpnJndiQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -22060,10 +22234,10 @@ func (a *MsgVpnApiService) GetMsgVpnJndiQueue(ctx context.Context, msgVpnName st
 //  @return MsgVpnJndiQueueResponse
 func (a *MsgVpnApiService) GetMsgVpnJndiQueueExecute(r MsgVpnApiApiGetMsgVpnJndiQueueRequest) (*MsgVpnJndiQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiQueueResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnJndiQueue")
@@ -22124,13 +22298,13 @@ func (a *MsgVpnApiService) GetMsgVpnJndiQueueExecute(r MsgVpnApiApiGetMsgVpnJndi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -22147,14 +22321,14 @@ func (a *MsgVpnApiService) GetMsgVpnJndiQueueExecute(r MsgVpnApiApiGetMsgVpnJndi
 }
 
 type MsgVpnApiApiGetMsgVpnJndiQueuesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -22162,21 +22336,25 @@ func (r MsgVpnApiApiGetMsgVpnJndiQueuesRequest) Count(count int32) MsgVpnApiApiG
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiQueuesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnJndiQueuesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiQueuesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnJndiQueuesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiQueuesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnJndiQueuesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiQueuesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnJndiQueuesRequest {
 	r.select_ = &select_
@@ -22213,7 +22391,7 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) GetMsgVpnJndiQueues(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnJndiQueuesRequest {
 	return MsgVpnApiApiGetMsgVpnJndiQueuesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -22222,10 +22400,10 @@ func (a *MsgVpnApiService) GetMsgVpnJndiQueues(ctx context.Context, msgVpnName s
 //  @return MsgVpnJndiQueuesResponse
 func (a *MsgVpnApiService) GetMsgVpnJndiQueuesExecute(r MsgVpnApiApiGetMsgVpnJndiQueuesRequest) (*MsgVpnJndiQueuesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiQueuesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiQueuesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnJndiQueues")
@@ -22294,13 +22472,13 @@ func (a *MsgVpnApiService) GetMsgVpnJndiQueuesExecute(r MsgVpnApiApiGetMsgVpnJnd
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -22317,12 +22495,12 @@ func (a *MsgVpnApiService) GetMsgVpnJndiQueuesExecute(r MsgVpnApiApiGetMsgVpnJnd
 }
 
 type MsgVpnApiApiGetMsgVpnJndiTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	topicName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	topicName      string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -22330,6 +22508,7 @@ func (r MsgVpnApiApiGetMsgVpnJndiTopicRequest) OpaquePassword(opaquePassword str
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiTopicRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnJndiTopicRequest {
 	r.select_ = &select_
@@ -22367,9 +22546,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) GetMsgVpnJndiTopic(ctx context.Context, msgVpnName string, topicName string) MsgVpnApiApiGetMsgVpnJndiTopicRequest {
 	return MsgVpnApiApiGetMsgVpnJndiTopicRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		topicName: topicName,
+		topicName:  topicName,
 	}
 }
 
@@ -22377,10 +22556,10 @@ func (a *MsgVpnApiService) GetMsgVpnJndiTopic(ctx context.Context, msgVpnName st
 //  @return MsgVpnJndiTopicResponse
 func (a *MsgVpnApiService) GetMsgVpnJndiTopicExecute(r MsgVpnApiApiGetMsgVpnJndiTopicRequest) (*MsgVpnJndiTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiTopicResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnJndiTopic")
@@ -22441,13 +22620,13 @@ func (a *MsgVpnApiService) GetMsgVpnJndiTopicExecute(r MsgVpnApiApiGetMsgVpnJndi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -22464,14 +22643,14 @@ func (a *MsgVpnApiService) GetMsgVpnJndiTopicExecute(r MsgVpnApiApiGetMsgVpnJndi
 }
 
 type MsgVpnApiApiGetMsgVpnJndiTopicsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -22479,21 +22658,25 @@ func (r MsgVpnApiApiGetMsgVpnJndiTopicsRequest) Count(count int32) MsgVpnApiApiG
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiTopicsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnJndiTopicsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiTopicsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnJndiTopicsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiTopicsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnJndiTopicsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnJndiTopicsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnJndiTopicsRequest {
 	r.select_ = &select_
@@ -22530,7 +22713,7 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) GetMsgVpnJndiTopics(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnJndiTopicsRequest {
 	return MsgVpnApiApiGetMsgVpnJndiTopicsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -22539,10 +22722,10 @@ func (a *MsgVpnApiService) GetMsgVpnJndiTopics(ctx context.Context, msgVpnName s
 //  @return MsgVpnJndiTopicsResponse
 func (a *MsgVpnApiService) GetMsgVpnJndiTopicsExecute(r MsgVpnApiApiGetMsgVpnJndiTopicsRequest) (*MsgVpnJndiTopicsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiTopicsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiTopicsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnJndiTopics")
@@ -22611,13 +22794,13 @@ func (a *MsgVpnApiService) GetMsgVpnJndiTopicsExecute(r MsgVpnApiApiGetMsgVpnJnd
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -22634,12 +22817,12 @@ func (a *MsgVpnApiService) GetMsgVpnJndiTopicsExecute(r MsgVpnApiApiGetMsgVpnJnd
 }
 
 type MsgVpnApiApiGetMsgVpnMqttRetainCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -22647,6 +22830,7 @@ func (r MsgVpnApiApiGetMsgVpnMqttRetainCacheRequest) OpaquePassword(opaquePasswo
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttRetainCacheRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnMqttRetainCacheRequest {
 	r.select_ = &select_
@@ -22684,9 +22868,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) GetMsgVpnMqttRetainCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiGetMsgVpnMqttRetainCacheRequest {
 	return MsgVpnApiApiGetMsgVpnMqttRetainCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -22694,10 +22878,10 @@ func (a *MsgVpnApiService) GetMsgVpnMqttRetainCache(ctx context.Context, msgVpnN
 //  @return MsgVpnMqttRetainCacheResponse
 func (a *MsgVpnApiService) GetMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiGetMsgVpnMqttRetainCacheRequest) (*MsgVpnMqttRetainCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttRetainCacheResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttRetainCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnMqttRetainCache")
@@ -22758,13 +22942,13 @@ func (a *MsgVpnApiService) GetMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiGetMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -22781,14 +22965,14 @@ func (a *MsgVpnApiService) GetMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiGetMsgV
 }
 
 type MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -22796,21 +22980,25 @@ func (r MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest) Count(count int32) MsgVpnA
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest {
 	r.select_ = &select_
@@ -22847,7 +23035,7 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) GetMsgVpnMqttRetainCaches(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest {
 	return MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -22856,10 +23044,10 @@ func (a *MsgVpnApiService) GetMsgVpnMqttRetainCaches(ctx context.Context, msgVpn
 //  @return MsgVpnMqttRetainCachesResponse
 func (a *MsgVpnApiService) GetMsgVpnMqttRetainCachesExecute(r MsgVpnApiApiGetMsgVpnMqttRetainCachesRequest) (*MsgVpnMqttRetainCachesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttRetainCachesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttRetainCachesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnMqttRetainCaches")
@@ -22928,13 +23116,13 @@ func (a *MsgVpnApiService) GetMsgVpnMqttRetainCachesExecute(r MsgVpnApiApiGetMsg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -22951,13 +23139,13 @@ func (a *MsgVpnApiService) GetMsgVpnMqttRetainCachesExecute(r MsgVpnApiApiGetMsg
 }
 
 type MsgVpnApiApiGetMsgVpnMqttSessionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword           *string
+	select_                  *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -22965,6 +23153,7 @@ func (r MsgVpnApiApiGetMsgVpnMqttSessionRequest) OpaquePassword(opaquePassword s
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnMqttSessionRequest {
 	r.select_ = &select_
@@ -23003,10 +23192,10 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) GetMsgVpnMqttSession(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string) MsgVpnApiApiGetMsgVpnMqttSessionRequest {
 	return MsgVpnApiApiGetMsgVpnMqttSessionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
 	}
 }
@@ -23015,10 +23204,10 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSession(ctx context.Context, msgVpnName 
 //  @return MsgVpnMqttSessionResponse
 func (a *MsgVpnApiService) GetMsgVpnMqttSessionExecute(r MsgVpnApiApiGetMsgVpnMqttSessionRequest) (*MsgVpnMqttSessionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnMqttSession")
@@ -23080,13 +23269,13 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionExecute(r MsgVpnApiApiGetMsgVpnMq
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -23103,14 +23292,14 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionExecute(r MsgVpnApiApiGetMsgVpnMq
 }
 
 type MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	subscriptionTopic string
-	opaquePassword *string
-	select_ *[]string
+	subscriptionTopic        string
+	opaquePassword           *string
+	select_                  *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -23118,6 +23307,7 @@ func (r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionRequest) OpaquePassword(opaq
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionRequest {
 	r.select_ = &select_
@@ -23158,12 +23348,12 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscription(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string, subscriptionTopic string) MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionRequest {
 	return MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
-		subscriptionTopic: subscriptionTopic,
+		subscriptionTopic:        subscriptionTopic,
 	}
 }
 
@@ -23171,10 +23361,10 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscription(ctx context.Context,
 //  @return MsgVpnMqttSessionSubscriptionResponse
 func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptionExecute(r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionRequest) (*MsgVpnMqttSessionSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionSubscriptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnMqttSessionSubscription")
@@ -23237,13 +23427,13 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptionExecute(r MsgVpnApiAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -23260,16 +23450,16 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptionExecute(r MsgVpnApiAp
 }
 
 type MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count                    *int32
+	cursor                   *string
+	opaquePassword           *string
+	where                    *[]string
+	select_                  *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -23277,21 +23467,25 @@ func (r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest) Count(count int32)
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest {
 	r.select_ = &select_
@@ -23331,10 +23525,10 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptions(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string) MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest {
 	return MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
 	}
 }
@@ -23343,10 +23537,10 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptions(ctx context.Context
 //  @return MsgVpnMqttSessionSubscriptionsResponse
 func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptionsExecute(r MsgVpnApiApiGetMsgVpnMqttSessionSubscriptionsRequest) (*MsgVpnMqttSessionSubscriptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionSubscriptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionSubscriptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnMqttSessionSubscriptions")
@@ -23417,13 +23611,13 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptionsExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -23440,14 +23634,14 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionSubscriptionsExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiGetMsgVpnMqttSessionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -23455,21 +23649,25 @@ func (r MsgVpnApiApiGetMsgVpnMqttSessionsRequest) Count(count int32) MsgVpnApiAp
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnMqttSessionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnMqttSessionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnMqttSessionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnMqttSessionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnMqttSessionsRequest {
 	r.select_ = &select_
@@ -23507,7 +23705,7 @@ This has been available since 2.1.
 func (a *MsgVpnApiService) GetMsgVpnMqttSessions(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnMqttSessionsRequest {
 	return MsgVpnApiApiGetMsgVpnMqttSessionsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -23516,10 +23714,10 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessions(ctx context.Context, msgVpnName
 //  @return MsgVpnMqttSessionsResponse
 func (a *MsgVpnApiService) GetMsgVpnMqttSessionsExecute(r MsgVpnApiApiGetMsgVpnMqttSessionsRequest) (*MsgVpnMqttSessionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnMqttSessions")
@@ -23588,13 +23786,13 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionsExecute(r MsgVpnApiApiGetMsgVpnM
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -23611,12 +23809,12 @@ func (a *MsgVpnApiService) GetMsgVpnMqttSessionsExecute(r MsgVpnApiApiGetMsgVpnM
 }
 
 type MsgVpnApiApiGetMsgVpnQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -23624,6 +23822,7 @@ func (r MsgVpnApiApiGetMsgVpnQueueRequest) OpaquePassword(opaquePassword string)
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnQueueRequest {
 	r.select_ = &select_
@@ -23661,9 +23860,9 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiGetMsgVpnQueueRequest {
 	return MsgVpnApiApiGetMsgVpnQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -23671,10 +23870,10 @@ func (a *MsgVpnApiService) GetMsgVpnQueue(ctx context.Context, msgVpnName string
 //  @return MsgVpnQueueResponse
 func (a *MsgVpnApiService) GetMsgVpnQueueExecute(r MsgVpnApiApiGetMsgVpnQueueRequest) (*MsgVpnQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnQueue")
@@ -23735,13 +23934,13 @@ func (a *MsgVpnApiService) GetMsgVpnQueueExecute(r MsgVpnApiApiGetMsgVpnQueueReq
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -23758,13 +23957,13 @@ func (a *MsgVpnApiService) GetMsgVpnQueueExecute(r MsgVpnApiApiGetMsgVpnQueueReq
 }
 
 type MsgVpnApiApiGetMsgVpnQueueSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
+	queueName         string
 	subscriptionTopic string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -23772,6 +23971,7 @@ func (r MsgVpnApiApiGetMsgVpnQueueSubscriptionRequest) OpaquePassword(opaquePass
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnQueueSubscriptionRequest {
 	r.select_ = &select_
@@ -23810,10 +24010,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnQueueSubscription(ctx context.Context, msgVpnName string, queueName string, subscriptionTopic string) MsgVpnApiApiGetMsgVpnQueueSubscriptionRequest {
 	return MsgVpnApiApiGetMsgVpnQueueSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		queueName: queueName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
+		queueName:         queueName,
 		subscriptionTopic: subscriptionTopic,
 	}
 }
@@ -23822,10 +24022,10 @@ func (a *MsgVpnApiService) GetMsgVpnQueueSubscription(ctx context.Context, msgVp
 //  @return MsgVpnQueueSubscriptionResponse
 func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiGetMsgVpnQueueSubscriptionRequest) (*MsgVpnQueueSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueSubscriptionResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnQueueSubscription")
@@ -23887,13 +24087,13 @@ func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiGetMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -23910,15 +24110,15 @@ func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptionExecute(r MsgVpnApiApiGetMs
 }
 
 type MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -23926,21 +24126,25 @@ func (r MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest) Count(count int32) MsgVp
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest {
 	r.select_ = &select_
@@ -23979,9 +24183,9 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptions(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest {
 	return MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -23989,10 +24193,10 @@ func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptions(ctx context.Context, msgV
 //  @return MsgVpnQueueSubscriptionsResponse
 func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptionsExecute(r MsgVpnApiApiGetMsgVpnQueueSubscriptionsRequest) (*MsgVpnQueueSubscriptionsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueSubscriptionsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueSubscriptionsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnQueueSubscriptions")
@@ -24062,13 +24266,13 @@ func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptionsExecute(r MsgVpnApiApiGetM
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -24085,12 +24289,12 @@ func (a *MsgVpnApiService) GetMsgVpnQueueSubscriptionsExecute(r MsgVpnApiApiGetM
 }
 
 type MsgVpnApiApiGetMsgVpnQueueTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	queueTemplateName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -24098,6 +24302,7 @@ func (r MsgVpnApiApiGetMsgVpnQueueTemplateRequest) OpaquePassword(opaquePassword
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueTemplateRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnQueueTemplateRequest {
 	r.select_ = &select_
@@ -24134,9 +24339,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnQueueTemplate(ctx context.Context, msgVpnName string, queueTemplateName string) MsgVpnApiApiGetMsgVpnQueueTemplateRequest {
 	return MsgVpnApiApiGetMsgVpnQueueTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		queueTemplateName: queueTemplateName,
 	}
 }
@@ -24145,10 +24350,10 @@ func (a *MsgVpnApiService) GetMsgVpnQueueTemplate(ctx context.Context, msgVpnNam
 //  @return MsgVpnQueueTemplateResponse
 func (a *MsgVpnApiService) GetMsgVpnQueueTemplateExecute(r MsgVpnApiApiGetMsgVpnQueueTemplateRequest) (*MsgVpnQueueTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueTemplateResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnQueueTemplate")
@@ -24209,13 +24414,13 @@ func (a *MsgVpnApiService) GetMsgVpnQueueTemplateExecute(r MsgVpnApiApiGetMsgVpn
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -24232,14 +24437,14 @@ func (a *MsgVpnApiService) GetMsgVpnQueueTemplateExecute(r MsgVpnApiApiGetMsgVpn
 }
 
 type MsgVpnApiApiGetMsgVpnQueueTemplatesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -24247,21 +24452,25 @@ func (r MsgVpnApiApiGetMsgVpnQueueTemplatesRequest) Count(count int32) MsgVpnApi
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueTemplatesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnQueueTemplatesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueTemplatesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnQueueTemplatesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueTemplatesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnQueueTemplatesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueueTemplatesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnQueueTemplatesRequest {
 	r.select_ = &select_
@@ -24298,7 +24507,7 @@ This has been available since 2.14.
 func (a *MsgVpnApiService) GetMsgVpnQueueTemplates(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnQueueTemplatesRequest {
 	return MsgVpnApiApiGetMsgVpnQueueTemplatesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -24307,10 +24516,10 @@ func (a *MsgVpnApiService) GetMsgVpnQueueTemplates(ctx context.Context, msgVpnNa
 //  @return MsgVpnQueueTemplatesResponse
 func (a *MsgVpnApiService) GetMsgVpnQueueTemplatesExecute(r MsgVpnApiApiGetMsgVpnQueueTemplatesRequest) (*MsgVpnQueueTemplatesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueTemplatesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueTemplatesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnQueueTemplates")
@@ -24379,13 +24588,13 @@ func (a *MsgVpnApiService) GetMsgVpnQueueTemplatesExecute(r MsgVpnApiApiGetMsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -24402,14 +24611,14 @@ func (a *MsgVpnApiService) GetMsgVpnQueueTemplatesExecute(r MsgVpnApiApiGetMsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnQueuesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -24417,21 +24626,25 @@ func (r MsgVpnApiApiGetMsgVpnQueuesRequest) Count(count int32) MsgVpnApiApiGetMs
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueuesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnQueuesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueuesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnQueuesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueuesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnQueuesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnQueuesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnQueuesRequest {
 	r.select_ = &select_
@@ -24468,7 +24681,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnQueues(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnQueuesRequest {
 	return MsgVpnApiApiGetMsgVpnQueuesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -24477,10 +24690,10 @@ func (a *MsgVpnApiService) GetMsgVpnQueues(ctx context.Context, msgVpnName strin
 //  @return MsgVpnQueuesResponse
 func (a *MsgVpnApiService) GetMsgVpnQueuesExecute(r MsgVpnApiApiGetMsgVpnQueuesRequest) (*MsgVpnQueuesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueuesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueuesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnQueues")
@@ -24549,13 +24762,13 @@ func (a *MsgVpnApiService) GetMsgVpnQueuesExecute(r MsgVpnApiApiGetMsgVpnQueuesR
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -24572,12 +24785,12 @@ func (a *MsgVpnApiService) GetMsgVpnQueuesExecute(r MsgVpnApiApiGetMsgVpnQueuesR
 }
 
 type MsgVpnApiApiGetMsgVpnReplayLogRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	replayLogName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	replayLogName  string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -24585,6 +24798,7 @@ func (r MsgVpnApiApiGetMsgVpnReplayLogRequest) OpaquePassword(opaquePassword str
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplayLogRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnReplayLogRequest {
 	r.select_ = &select_
@@ -24621,9 +24835,9 @@ This has been available since 2.10.
 */
 func (a *MsgVpnApiService) GetMsgVpnReplayLog(ctx context.Context, msgVpnName string, replayLogName string) MsgVpnApiApiGetMsgVpnReplayLogRequest {
 	return MsgVpnApiApiGetMsgVpnReplayLogRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:    a,
+		ctx:           ctx,
+		msgVpnName:    msgVpnName,
 		replayLogName: replayLogName,
 	}
 }
@@ -24632,10 +24846,10 @@ func (a *MsgVpnApiService) GetMsgVpnReplayLog(ctx context.Context, msgVpnName st
 //  @return MsgVpnReplayLogResponse
 func (a *MsgVpnApiService) GetMsgVpnReplayLogExecute(r MsgVpnApiApiGetMsgVpnReplayLogRequest) (*MsgVpnReplayLogResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplayLogResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplayLogResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnReplayLog")
@@ -24696,13 +24910,13 @@ func (a *MsgVpnApiService) GetMsgVpnReplayLogExecute(r MsgVpnApiApiGetMsgVpnRepl
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -24719,14 +24933,14 @@ func (a *MsgVpnApiService) GetMsgVpnReplayLogExecute(r MsgVpnApiApiGetMsgVpnRepl
 }
 
 type MsgVpnApiApiGetMsgVpnReplayLogsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -24734,21 +24948,25 @@ func (r MsgVpnApiApiGetMsgVpnReplayLogsRequest) Count(count int32) MsgVpnApiApiG
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplayLogsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnReplayLogsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplayLogsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnReplayLogsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplayLogsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnReplayLogsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplayLogsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnReplayLogsRequest {
 	r.select_ = &select_
@@ -24785,7 +25003,7 @@ This has been available since 2.10.
 func (a *MsgVpnApiService) GetMsgVpnReplayLogs(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnReplayLogsRequest {
 	return MsgVpnApiApiGetMsgVpnReplayLogsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -24794,10 +25012,10 @@ func (a *MsgVpnApiService) GetMsgVpnReplayLogs(ctx context.Context, msgVpnName s
 //  @return MsgVpnReplayLogsResponse
 func (a *MsgVpnApiService) GetMsgVpnReplayLogsExecute(r MsgVpnApiApiGetMsgVpnReplayLogsRequest) (*MsgVpnReplayLogsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplayLogsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplayLogsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnReplayLogs")
@@ -24866,13 +25084,13 @@ func (a *MsgVpnApiService) GetMsgVpnReplayLogsExecute(r MsgVpnApiApiGetMsgVpnRep
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -24889,12 +25107,12 @@ func (a *MsgVpnApiService) GetMsgVpnReplayLogsExecute(r MsgVpnApiApiGetMsgVpnRep
 }
 
 type MsgVpnApiApiGetMsgVpnReplicatedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
 	replicatedTopic string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -24902,6 +25120,7 @@ func (r MsgVpnApiApiGetMsgVpnReplicatedTopicRequest) OpaquePassword(opaquePasswo
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplicatedTopicRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnReplicatedTopicRequest {
 	r.select_ = &select_
@@ -24938,9 +25157,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) GetMsgVpnReplicatedTopic(ctx context.Context, msgVpnName string, replicatedTopic string) MsgVpnApiApiGetMsgVpnReplicatedTopicRequest {
 	return MsgVpnApiApiGetMsgVpnReplicatedTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
 		replicatedTopic: replicatedTopic,
 	}
 }
@@ -24949,10 +25168,10 @@ func (a *MsgVpnApiService) GetMsgVpnReplicatedTopic(ctx context.Context, msgVpnN
 //  @return MsgVpnReplicatedTopicResponse
 func (a *MsgVpnApiService) GetMsgVpnReplicatedTopicExecute(r MsgVpnApiApiGetMsgVpnReplicatedTopicRequest) (*MsgVpnReplicatedTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplicatedTopicResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplicatedTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnReplicatedTopic")
@@ -25013,13 +25232,13 @@ func (a *MsgVpnApiService) GetMsgVpnReplicatedTopicExecute(r MsgVpnApiApiGetMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -25036,14 +25255,14 @@ func (a *MsgVpnApiService) GetMsgVpnReplicatedTopicExecute(r MsgVpnApiApiGetMsgV
 }
 
 type MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -25051,21 +25270,25 @@ func (r MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest) Count(count int32) MsgVpnA
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest {
 	r.select_ = &select_
@@ -25102,7 +25325,7 @@ This has been available since 2.1.
 func (a *MsgVpnApiService) GetMsgVpnReplicatedTopics(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest {
 	return MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -25111,10 +25334,10 @@ func (a *MsgVpnApiService) GetMsgVpnReplicatedTopics(ctx context.Context, msgVpn
 //  @return MsgVpnReplicatedTopicsResponse
 func (a *MsgVpnApiService) GetMsgVpnReplicatedTopicsExecute(r MsgVpnApiApiGetMsgVpnReplicatedTopicsRequest) (*MsgVpnReplicatedTopicsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplicatedTopicsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplicatedTopicsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnReplicatedTopics")
@@ -25183,13 +25406,13 @@ func (a *MsgVpnApiService) GetMsgVpnReplicatedTopicsExecute(r MsgVpnApiApiGetMsg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -25206,12 +25429,12 @@ func (a *MsgVpnApiService) GetMsgVpnReplicatedTopicsExecute(r MsgVpnApiApiGetMsg
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -25219,6 +25442,7 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRequest) OpaquePassword(opaquePass
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRequest {
 	r.select_ = &select_
@@ -25255,9 +25479,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPoint(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -25266,10 +25490,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPoint(ctx context.Context, msgVp
 //  @return MsgVpnRestDeliveryPointResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointRequest) (*MsgVpnRestDeliveryPointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPoint")
@@ -25330,13 +25554,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiGetMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -25353,13 +25577,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiGetMs
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	opaquePassword *string
-	select_ *[]string
+	queueBindingName      string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -25367,6 +25591,7 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequest) OpaquePasswor
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequest {
 	r.select_ = &select_
@@ -25405,11 +25630,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBinding(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
+		queueBindingName:      queueBindingName,
 	}
 }
 
@@ -25417,10 +25642,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBinding(ctx context.Co
 //  @return MsgVpnRestDeliveryPointQueueBindingResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequest) (*MsgVpnRestDeliveryPointQueueBindingResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointQueueBinding")
@@ -25482,13 +25707,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -25505,14 +25730,14 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingExecute(r MsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	headerName string
-	opaquePassword *string
-	select_ *[]string
+	queueBindingName      string
+	headerName            string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -25520,6 +25745,7 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) 
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	r.select_ = &select_
@@ -25560,12 +25786,12 @@ This has been available since 2.23.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeader(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string, headerName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
-		headerName: headerName,
+		queueBindingName:      queueBindingName,
+		headerName:            headerName,
 	}
 }
 
@@ -25573,10 +25799,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeader(c
 //  @return MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeaderExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) (*MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointQueueBindingRequestHeader")
@@ -25639,13 +25865,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeaderEx
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -25662,16 +25888,16 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeaderEx
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	queueBindingName      string
+	count                 *int32
+	cursor                *string
+	opaquePassword        *string
+	where                 *[]string
+	select_               *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -25679,21 +25905,25 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest)
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest) Where(where []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest {
 	r.select_ = &select_
@@ -25733,11 +25963,11 @@ This has been available since 2.23.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeaders(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
+		queueBindingName:      queueBindingName,
 	}
 }
 
@@ -25745,10 +25975,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeaders(
 //  @return MsgVpnRestDeliveryPointQueueBindingRequestHeadersResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeadersExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingRequestHeadersRequest) (*MsgVpnRestDeliveryPointQueueBindingRequestHeadersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingRequestHeadersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingRequestHeadersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointQueueBindingRequestHeaders")
@@ -25819,13 +26049,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeadersE
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -25842,15 +26072,15 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingRequestHeadersE
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count                 *int32
+	cursor                *string
+	opaquePassword        *string
+	where                 *[]string
+	select_               *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -25858,21 +26088,25 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest) Count(count 
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest {
 	r.select_ = &select_
@@ -25910,9 +26144,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindings(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -25921,10 +26155,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindings(ctx context.C
 //  @return MsgVpnRestDeliveryPointQueueBindingsResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingsExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointQueueBindingsRequest) (*MsgVpnRestDeliveryPointQueueBindingsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointQueueBindings")
@@ -25994,13 +26228,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingsExecute(r MsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -26017,13 +26251,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointQueueBindingsExecute(r MsgV
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	opaquePassword *string
-	select_ *[]string
+	restConsumerName      string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -26031,6 +26265,7 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerRequest) OpaquePasswor
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerRequest {
 	r.select_ = &select_
@@ -26076,11 +26311,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumer(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -26088,10 +26323,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumer(ctx context.Co
 //  @return MsgVpnRestDeliveryPointRestConsumerResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerRequest) (*MsgVpnRestDeliveryPointRestConsumerResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointRestConsumer")
@@ -26153,13 +26388,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -26176,14 +26411,14 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerExecute(r MsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	oauthJwtClaimName string
-	opaquePassword *string
-	select_ *[]string
+	restConsumerName      string
+	oauthJwtClaimName     string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -26191,6 +26426,7 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) 
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest {
 	r.select_ = &select_
@@ -26231,12 +26467,12 @@ This has been available since 2.21.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaim(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string, oauthJwtClaimName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
-		oauthJwtClaimName: oauthJwtClaimName,
+		restConsumerName:      restConsumerName,
+		oauthJwtClaimName:     oauthJwtClaimName,
 	}
 }
 
@@ -26244,10 +26480,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaim(c
 //  @return MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimRequest) (*MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaim")
@@ -26310,13 +26546,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimEx
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -26333,16 +26569,16 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimEx
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	restConsumerName      string
+	count                 *int32
+	cursor                *string
+	opaquePassword        *string
+	where                 *[]string
+	select_               *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -26350,21 +26586,25 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest)
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest {
 	r.select_ = &select_
@@ -26404,11 +26644,11 @@ This has been available since 2.21.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaims(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -26416,10 +26656,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaims(
 //  @return MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsRequest) (*MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaims")
@@ -26490,13 +26730,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsE
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -26513,14 +26753,14 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerOauthJwtClaimsE
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	tlsTrustedCommonName string
-	opaquePassword *string
-	select_ *[]string
+	restConsumerName      string
+	tlsTrustedCommonName  string
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -26528,6 +26768,7 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRe
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest {
 	r.select_ = &select_
@@ -26570,12 +26811,12 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string, tlsTrustedCommonName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
-		tlsTrustedCommonName: tlsTrustedCommonName,
+		restConsumerName:      restConsumerName,
+		tlsTrustedCommonName:  tlsTrustedCommonName,
 	}
 }
 
@@ -26584,10 +26825,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommo
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameRequest) (*MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonName")
@@ -26650,13 +26891,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommo
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -26673,14 +26914,14 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommo
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	restConsumerName      string
+	opaquePassword        *string
+	where                 *[]string
+	select_               *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -26688,11 +26929,13 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesR
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest {
 	r.select_ = &select_
@@ -26734,11 +26977,11 @@ Deprecated
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNames(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -26747,10 +26990,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommo
 // Deprecated
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesRequest) (*MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNamesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommonNames")
@@ -26815,13 +27058,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommo
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -26838,15 +27081,15 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumerTlsTrustedCommo
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	count *int32
-	cursor *string
-	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	count                 *int32
+	cursor                *string
+	opaquePassword        *string
+	where                 *[]string
+	select_               *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -26854,21 +27097,25 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest) Count(count 
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest) Where(where []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest {
 	r.select_ = &select_
@@ -26913,9 +27160,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumers(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -26924,10 +27171,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumers(ctx context.C
 //  @return MsgVpnRestDeliveryPointRestConsumersResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumersExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointRestConsumersRequest) (*MsgVpnRestDeliveryPointRestConsumersResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumersResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumersResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPointRestConsumers")
@@ -26997,13 +27244,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumersExecute(r MsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -27020,14 +27267,14 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointRestConsumersExecute(r MsgV
 }
 
 type MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -27035,21 +27282,25 @@ func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest) Count(count int32) MsgVp
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest {
 	r.select_ = &select_
@@ -27086,7 +27337,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPoints(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest {
 	return MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -27095,10 +27346,10 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPoints(ctx context.Context, msgV
 //  @return MsgVpnRestDeliveryPointsResponse
 func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointsExecute(r MsgVpnApiApiGetMsgVpnRestDeliveryPointsRequest) (*MsgVpnRestDeliveryPointsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnRestDeliveryPoints")
@@ -27167,13 +27418,13 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointsExecute(r MsgVpnApiApiGetM
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -27190,12 +27441,12 @@ func (a *MsgVpnApiService) GetMsgVpnRestDeliveryPointsExecute(r MsgVpnApiApiGetM
 }
 
 type MsgVpnApiApiGetMsgVpnSequencedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	sequencedTopic string
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -27203,6 +27454,7 @@ func (r MsgVpnApiApiGetMsgVpnSequencedTopicRequest) OpaquePassword(opaquePasswor
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnSequencedTopicRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnSequencedTopicRequest {
 	r.select_ = &select_
@@ -27239,9 +27491,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) GetMsgVpnSequencedTopic(ctx context.Context, msgVpnName string, sequencedTopic string) MsgVpnApiApiGetMsgVpnSequencedTopicRequest {
 	return MsgVpnApiApiGetMsgVpnSequencedTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		sequencedTopic: sequencedTopic,
 	}
 }
@@ -27250,10 +27502,10 @@ func (a *MsgVpnApiService) GetMsgVpnSequencedTopic(ctx context.Context, msgVpnNa
 //  @return MsgVpnSequencedTopicResponse
 func (a *MsgVpnApiService) GetMsgVpnSequencedTopicExecute(r MsgVpnApiApiGetMsgVpnSequencedTopicRequest) (*MsgVpnSequencedTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnSequencedTopicResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnSequencedTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnSequencedTopic")
@@ -27314,13 +27566,13 @@ func (a *MsgVpnApiService) GetMsgVpnSequencedTopicExecute(r MsgVpnApiApiGetMsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -27337,14 +27589,14 @@ func (a *MsgVpnApiService) GetMsgVpnSequencedTopicExecute(r MsgVpnApiApiGetMsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnSequencedTopicsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -27352,21 +27604,25 @@ func (r MsgVpnApiApiGetMsgVpnSequencedTopicsRequest) Count(count int32) MsgVpnAp
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnSequencedTopicsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnSequencedTopicsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnSequencedTopicsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnSequencedTopicsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnSequencedTopicsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnSequencedTopicsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnSequencedTopicsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnSequencedTopicsRequest {
 	r.select_ = &select_
@@ -27403,7 +27659,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpnSequencedTopics(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnSequencedTopicsRequest {
 	return MsgVpnApiApiGetMsgVpnSequencedTopicsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -27412,10 +27668,10 @@ func (a *MsgVpnApiService) GetMsgVpnSequencedTopics(ctx context.Context, msgVpnN
 //  @return MsgVpnSequencedTopicsResponse
 func (a *MsgVpnApiService) GetMsgVpnSequencedTopicsExecute(r MsgVpnApiApiGetMsgVpnSequencedTopicsRequest) (*MsgVpnSequencedTopicsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnSequencedTopicsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnSequencedTopicsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnSequencedTopics")
@@ -27484,13 +27740,13 @@ func (a *MsgVpnApiService) GetMsgVpnSequencedTopicsExecute(r MsgVpnApiApiGetMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -27507,12 +27763,12 @@ func (a *MsgVpnApiService) GetMsgVpnSequencedTopicsExecute(r MsgVpnApiApiGetMsgV
 }
 
 type MsgVpnApiApiGetMsgVpnTopicEndpointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	topicEndpointName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -27520,6 +27776,7 @@ func (r MsgVpnApiApiGetMsgVpnTopicEndpointRequest) OpaquePassword(opaquePassword
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnTopicEndpointRequest {
 	r.select_ = &select_
@@ -27556,9 +27813,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpoint(ctx context.Context, msgVpnName string, topicEndpointName string) MsgVpnApiApiGetMsgVpnTopicEndpointRequest {
 	return MsgVpnApiApiGetMsgVpnTopicEndpointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		topicEndpointName: topicEndpointName,
 	}
 }
@@ -27567,10 +27824,10 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpoint(ctx context.Context, msgVpnNam
 //  @return MsgVpnTopicEndpointResponse
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpointExecute(r MsgVpnApiApiGetMsgVpnTopicEndpointRequest) (*MsgVpnTopicEndpointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnTopicEndpoint")
@@ -27631,13 +27888,13 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointExecute(r MsgVpnApiApiGetMsgVpn
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -27654,12 +27911,12 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointExecute(r MsgVpnApiApiGetMsgVpn
 }
 
 type MsgVpnApiApiGetMsgVpnTopicEndpointTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                       context.Context
+	ApiService                *MsgVpnApiService
+	msgVpnName                string
 	topicEndpointTemplateName string
-	opaquePassword *string
-	select_ *[]string
+	opaquePassword            *string
+	select_                   *[]string
 }
 
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
@@ -27667,6 +27924,7 @@ func (r MsgVpnApiApiGetMsgVpnTopicEndpointTemplateRequest) OpaquePassword(opaque
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointTemplateRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnTopicEndpointTemplateRequest {
 	r.select_ = &select_
@@ -27703,9 +27961,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplate(ctx context.Context, msgVpnName string, topicEndpointTemplateName string) MsgVpnApiApiGetMsgVpnTopicEndpointTemplateRequest {
 	return MsgVpnApiApiGetMsgVpnTopicEndpointTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:                a,
+		ctx:                       ctx,
+		msgVpnName:                msgVpnName,
 		topicEndpointTemplateName: topicEndpointTemplateName,
 	}
 }
@@ -27714,10 +27972,10 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplate(ctx context.Context, m
 //  @return MsgVpnTopicEndpointTemplateResponse
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiApiGetMsgVpnTopicEndpointTemplateRequest) (*MsgVpnTopicEndpointTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointTemplateResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnTopicEndpointTemplate")
@@ -27778,13 +28036,13 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiApiG
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -27801,14 +28059,14 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiApiG
 }
 
 type MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -27816,21 +28074,25 @@ func (r MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest) Count(count int32) M
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest) Where(where []string) MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest {
 	r.select_ = &select_
@@ -27867,7 +28129,7 @@ This has been available since 2.14.
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplates(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest {
 	return MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -27876,10 +28138,10 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplates(ctx context.Context, 
 //  @return MsgVpnTopicEndpointTemplatesResponse
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplatesExecute(r MsgVpnApiApiGetMsgVpnTopicEndpointTemplatesRequest) (*MsgVpnTopicEndpointTemplatesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointTemplatesResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointTemplatesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnTopicEndpointTemplates")
@@ -27948,13 +28210,13 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplatesExecute(r MsgVpnApiApi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -27971,14 +28233,14 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointTemplatesExecute(r MsgVpnApiApi
 }
 
 type MsgVpnApiApiGetMsgVpnTopicEndpointsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -27986,21 +28248,25 @@ func (r MsgVpnApiApiGetMsgVpnTopicEndpointsRequest) Count(count int32) MsgVpnApi
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnTopicEndpointsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnTopicEndpointsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnTopicEndpointsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnTopicEndpointsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnTopicEndpointsRequest {
 	r.select_ = &select_
@@ -28037,7 +28303,7 @@ This has been available since 2.1.
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpoints(ctx context.Context, msgVpnName string) MsgVpnApiApiGetMsgVpnTopicEndpointsRequest {
 	return MsgVpnApiApiGetMsgVpnTopicEndpointsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -28046,10 +28312,10 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpoints(ctx context.Context, msgVpnNa
 //  @return MsgVpnTopicEndpointsResponse
 func (a *MsgVpnApiService) GetMsgVpnTopicEndpointsExecute(r MsgVpnApiApiGetMsgVpnTopicEndpointsRequest) (*MsgVpnTopicEndpointsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpnTopicEndpoints")
@@ -28118,13 +28384,13 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointsExecute(r MsgVpnApiApiGetMsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -28141,13 +28407,13 @@ func (a *MsgVpnApiService) GetMsgVpnTopicEndpointsExecute(r MsgVpnApiApiGetMsgVp
 }
 
 type MsgVpnApiApiGetMsgVpnsRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	count *int32
-	cursor *string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	count          *int32
+	cursor         *string
 	opaquePassword *string
-	where *[]string
-	select_ *[]string
+	where          *[]string
+	select_        *[]string
 }
 
 // Limit the count of objects in the response. See the documentation for the &#x60;count&#x60; parameter.
@@ -28155,21 +28421,25 @@ func (r MsgVpnApiApiGetMsgVpnsRequest) Count(count int32) MsgVpnApiApiGetMsgVpns
 	r.count = &count
 	return r
 }
+
 // The cursor, or position, for the next page of objects. See the documentation for the &#x60;cursor&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnsRequest) Cursor(cursor string) MsgVpnApiApiGetMsgVpnsRequest {
 	r.cursor = &cursor
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnsRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiGetMsgVpnsRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only objects where certain conditions are true. See the the documentation for the &#x60;where&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnsRequest) Where(where []string) MsgVpnApiApiGetMsgVpnsRequest {
 	r.where = &where
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiGetMsgVpnsRequest) Select_(select_ []string) MsgVpnApiApiGetMsgVpnsRequest {
 	r.select_ = &select_
@@ -28211,7 +28481,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) GetMsgVpns(ctx context.Context) MsgVpnApiApiGetMsgVpnsRequest {
 	return MsgVpnApiApiGetMsgVpnsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
@@ -28219,10 +28489,10 @@ func (a *MsgVpnApiService) GetMsgVpns(ctx context.Context) MsgVpnApiApiGetMsgVpn
 //  @return MsgVpnsResponse
 func (a *MsgVpnApiService) GetMsgVpnsExecute(r MsgVpnApiApiGetMsgVpnsRequest) (*MsgVpnsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnsResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.GetMsgVpns")
@@ -28290,13 +28560,13 @@ func (a *MsgVpnApiService) GetMsgVpnsExecute(r MsgVpnApiApiGetMsgVpnsRequest) (*
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -28313,12 +28583,12 @@ func (a *MsgVpnApiService) GetMsgVpnsExecute(r MsgVpnApiApiGetMsgVpnsRequest) (*
 }
 
 type MsgVpnApiApiReplaceMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpn
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpn
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Message VPN object&#39;s attributes.
@@ -28326,11 +28596,13 @@ func (r MsgVpnApiApiReplaceMsgVpnRequest) Body(body MsgVpn) MsgVpnApiApiReplaceM
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnRequest {
 	r.select_ = &select_
@@ -28467,7 +28739,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) ReplaceMsgVpn(ctx context.Context, msgVpnName string) MsgVpnApiApiReplaceMsgVpnRequest {
 	return MsgVpnApiApiReplaceMsgVpnRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -28476,10 +28748,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpn(ctx context.Context, msgVpnName string)
 //  @return MsgVpnResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnExecute(r MsgVpnApiApiReplaceMsgVpnRequest) (*MsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpn")
@@ -28544,13 +28816,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnExecute(r MsgVpnApiApiReplaceMsgVpnReque
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -28567,13 +28839,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnExecute(r MsgVpnApiApiReplaceMsgVpnReque
 }
 
 type MsgVpnApiApiReplaceMsgVpnAclProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfile
+	body           *MsgVpnAclProfile
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The ACL Profile object&#39;s attributes.
@@ -28581,11 +28853,13 @@ func (r MsgVpnApiApiReplaceMsgVpnAclProfileRequest) Body(body MsgVpnAclProfile) 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAclProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnAclProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAclProfileRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnAclProfileRequest {
 	r.select_ = &select_
@@ -28622,9 +28896,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnAclProfile(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiReplaceMsgVpnAclProfileRequest {
 	return MsgVpnApiApiReplaceMsgVpnAclProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -28633,10 +28907,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAclProfile(ctx context.Context, msgVpnNa
 //  @return MsgVpnAclProfileResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnAclProfileExecute(r MsgVpnApiApiReplaceMsgVpnAclProfileRequest) (*MsgVpnAclProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnAclProfile")
@@ -28702,13 +28976,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAclProfileExecute(r MsgVpnApiApiReplaceM
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -28725,13 +28999,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAclProfileExecute(r MsgVpnApiApiReplaceM
 }
 
 type MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
-	body *MsgVpnAuthenticationOauthProfile
-	opaquePassword *string
-	select_ *[]string
+	body             *MsgVpnAuthenticationOauthProfile
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The OAuth Profile object&#39;s attributes.
@@ -28739,11 +29013,13 @@ func (r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest) Body(body Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest {
 	r.select_ = &select_
@@ -28781,9 +29057,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProfile(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest {
 	return MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -28792,10 +29068,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProfile(ctx context.C
 //  @return MsgVpnAuthenticationOauthProfileResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProfileExecute(r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProfileRequest) (*MsgVpnAuthenticationOauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnAuthenticationOauthProfile")
@@ -28861,13 +29137,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProfileExecute(r MsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -28884,13 +29160,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProfileExecute(r MsgV
 }
 
 type MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	oauthProviderName string
-	body *MsgVpnAuthenticationOauthProvider
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnAuthenticationOauthProvider
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The OAuth Provider object&#39;s attributes.
@@ -28898,11 +29174,13 @@ func (r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest) Body(body M
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest {
 	r.select_ = &select_
@@ -28961,9 +29239,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProvider(ctx context.Context, msgVpnName string, oauthProviderName string) MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest {
 	return MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		oauthProviderName: oauthProviderName,
 	}
 }
@@ -28973,10 +29251,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProvider(ctx context.
 // Deprecated
 func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProviderExecute(r MsgVpnApiApiReplaceMsgVpnAuthenticationOauthProviderRequest) (*MsgVpnAuthenticationOauthProviderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProviderResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProviderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnAuthenticationOauthProvider")
@@ -29042,13 +29320,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProviderExecute(r Msg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -29065,13 +29343,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthenticationOauthProviderExecute(r Msg
 }
 
 type MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                    context.Context
+	ApiService             *MsgVpnApiService
+	msgVpnName             string
 	authorizationGroupName string
-	body *MsgVpnAuthorizationGroup
-	opaquePassword *string
-	select_ *[]string
+	body                   *MsgVpnAuthorizationGroup
+	opaquePassword         *string
+	select_                *[]string
 }
 
 // The Authorization Group object&#39;s attributes.
@@ -29079,11 +29357,13 @@ func (r MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest) Body(body MsgVpnAuth
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest {
 	r.select_ = &select_
@@ -29134,9 +29414,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnAuthorizationGroup(ctx context.Context, msgVpnName string, authorizationGroupName string) MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest {
 	return MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:             a,
+		ctx:                    ctx,
+		msgVpnName:             msgVpnName,
 		authorizationGroupName: authorizationGroupName,
 	}
 }
@@ -29145,10 +29425,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthorizationGroup(ctx context.Context, 
 //  @return MsgVpnAuthorizationGroupResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiReplaceMsgVpnAuthorizationGroupRequest) (*MsgVpnAuthorizationGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthorizationGroupResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthorizationGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnAuthorizationGroup")
@@ -29214,13 +29494,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthorizationGroupExecute(r MsgVpnApiApi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -29237,14 +29517,14 @@ func (a *MsgVpnApiService) ReplaceMsgVpnAuthorizationGroupExecute(r MsgVpnApiApi
 }
 
 type MsgVpnApiApiReplaceMsgVpnBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	body *MsgVpnBridge
-	opaquePassword *string
-	select_ *[]string
+	body                *MsgVpnBridge
+	opaquePassword      *string
+	select_             *[]string
 }
 
 // The Bridge object&#39;s attributes.
@@ -29252,11 +29532,13 @@ func (r MsgVpnApiApiReplaceMsgVpnBridgeRequest) Body(body MsgVpnBridge) MsgVpnAp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnBridgeRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnBridgeRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnBridgeRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnBridgeRequest {
 	r.select_ = &select_
@@ -29313,10 +29595,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnBridge(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiReplaceMsgVpnBridgeRequest {
 	return MsgVpnApiApiReplaceMsgVpnBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -29325,10 +29607,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnBridge(ctx context.Context, msgVpnName s
 //  @return MsgVpnBridgeResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnBridgeExecute(r MsgVpnApiApiReplaceMsgVpnBridgeRequest) (*MsgVpnBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnBridge")
@@ -29395,13 +29677,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnBridgeExecute(r MsgVpnApiApiReplaceMsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -29418,17 +29700,17 @@ func (a *MsgVpnApiService) ReplaceMsgVpnBridgeExecute(r MsgVpnApiApiReplaceMsgVp
 }
 
 type MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
-	remoteMsgVpnName string
-	remoteMsgVpnLocation string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
+	bridgeName            string
+	bridgeVirtualRouter   string
+	remoteMsgVpnName      string
+	remoteMsgVpnLocation  string
 	remoteMsgVpnInterface string
-	body *MsgVpnBridgeRemoteMsgVpn
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnBridgeRemoteMsgVpn
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Remote Message VPN object&#39;s attributes.
@@ -29436,11 +29718,13 @@ func (r MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest) Body(body MsgVpnBrid
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest {
 	r.select_ = &select_
@@ -29500,13 +29784,13 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnBridgeRemoteMsgVpn(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, remoteMsgVpnName string, remoteMsgVpnLocation string, remoteMsgVpnInterface string) MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest {
 	return MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
-		remoteMsgVpnName: remoteMsgVpnName,
-		remoteMsgVpnLocation: remoteMsgVpnLocation,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
+		bridgeName:            bridgeName,
+		bridgeVirtualRouter:   bridgeVirtualRouter,
+		remoteMsgVpnName:      remoteMsgVpnName,
+		remoteMsgVpnLocation:  remoteMsgVpnLocation,
 		remoteMsgVpnInterface: remoteMsgVpnInterface,
 	}
 }
@@ -29515,10 +29799,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnBridgeRemoteMsgVpn(ctx context.Context, 
 //  @return MsgVpnBridgeRemoteMsgVpnResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiReplaceMsgVpnBridgeRemoteMsgVpnRequest) (*MsgVpnBridgeRemoteMsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteMsgVpnResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteMsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnBridgeRemoteMsgVpn")
@@ -29588,13 +29872,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -29611,13 +29895,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApi
 }
 
 type MsgVpnApiApiReplaceMsgVpnClientProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	clientProfileName string
-	body *MsgVpnClientProfile
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnClientProfile
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The Client Profile object&#39;s attributes.
@@ -29625,11 +29909,13 @@ func (r MsgVpnApiApiReplaceMsgVpnClientProfileRequest) Body(body MsgVpnClientPro
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnClientProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnClientProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnClientProfileRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnClientProfileRequest {
 	r.select_ = &select_
@@ -29683,9 +29969,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnClientProfile(ctx context.Context, msgVpnName string, clientProfileName string) MsgVpnApiApiReplaceMsgVpnClientProfileRequest {
 	return MsgVpnApiApiReplaceMsgVpnClientProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		clientProfileName: clientProfileName,
 	}
 }
@@ -29694,10 +29980,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnClientProfile(ctx context.Context, msgVp
 //  @return MsgVpnClientProfileResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnClientProfileExecute(r MsgVpnApiApiReplaceMsgVpnClientProfileRequest) (*MsgVpnClientProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientProfileResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnClientProfile")
@@ -29763,13 +30049,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnClientProfileExecute(r MsgVpnApiApiRepla
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -29786,13 +30072,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnClientProfileExecute(r MsgVpnApiApiRepla
 }
 
 type MsgVpnApiApiReplaceMsgVpnClientUsernameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	clientUsername string
-	body *MsgVpnClientUsername
+	body           *MsgVpnClientUsername
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Client Username object&#39;s attributes.
@@ -29800,11 +30086,13 @@ func (r MsgVpnApiApiReplaceMsgVpnClientUsernameRequest) Body(body MsgVpnClientUs
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnClientUsernameRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnClientUsernameRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnClientUsernameRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnClientUsernameRequest {
 	r.select_ = &select_
@@ -29844,9 +30132,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnClientUsername(ctx context.Context, msgVpnName string, clientUsername string) MsgVpnApiApiReplaceMsgVpnClientUsernameRequest {
 	return MsgVpnApiApiReplaceMsgVpnClientUsernameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		clientUsername: clientUsername,
 	}
 }
@@ -29855,10 +30143,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnClientUsername(ctx context.Context, msgV
 //  @return MsgVpnClientUsernameResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnClientUsernameExecute(r MsgVpnApiApiReplaceMsgVpnClientUsernameRequest) (*MsgVpnClientUsernameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientUsernameResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientUsernameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnClientUsername")
@@ -29924,13 +30212,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnClientUsernameExecute(r MsgVpnApiApiRepl
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -29947,13 +30235,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnClientUsernameExecute(r MsgVpnApiApiRepl
 }
 
 type MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnDistributedCache
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnDistributedCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Distributed Cache object&#39;s attributes.
@@ -29961,11 +30249,13 @@ func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest) Body(body MsgVpnDistri
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -30013,9 +30303,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest {
 	return MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -30023,10 +30313,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCache(ctx context.Context, ms
 //  @return MsgVpnDistributedCacheResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheExecute(r MsgVpnApiApiReplaceMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnDistributedCache")
@@ -30092,13 +30382,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheExecute(r MsgVpnApiApiRe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -30115,14 +30405,14 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheExecute(r MsgVpnApiApiRe
 }
 
 type MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheCluster
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Cluster object&#39;s attributes.
@@ -30130,11 +30420,13 @@ func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest) Body(body MsgVp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -30185,10 +30477,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest {
 	return MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -30197,10 +30489,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheCluster(ctx context.Cont
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterExecute(r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnDistributedCacheCluster")
@@ -30267,13 +30559,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -30290,15 +30582,15 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	instanceName string
-	body *MsgVpnDistributedCacheClusterInstance
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	instanceName   string
+	body           *MsgVpnDistributedCacheClusterInstance
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Instance object&#39;s attributes.
@@ -30306,11 +30598,13 @@ func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest) Body(bo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -30351,11 +30645,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest {
 	return MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -30364,10 +30658,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterInstance(ctx cont
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterInstanceExecute(r MsgVpnApiApiReplaceMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnDistributedCacheClusterInstance")
@@ -30435,13 +30729,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterInstanceExecute(r
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -30458,13 +30752,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDistributedCacheClusterInstanceExecute(r
 }
 
 type MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	remoteNodeName string
-	body *MsgVpnDmrBridge
+	body           *MsgVpnDmrBridge
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The DMR Bridge object&#39;s attributes.
@@ -30472,11 +30766,13 @@ func (r MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest) Body(body MsgVpnDmrBridge) Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest {
 	r.select_ = &select_
@@ -30513,9 +30809,9 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnDmrBridge(ctx context.Context, msgVpnName string, remoteNodeName string) MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest {
 	return MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		remoteNodeName: remoteNodeName,
 	}
 }
@@ -30524,10 +30820,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDmrBridge(ctx context.Context, msgVpnNam
 //  @return MsgVpnDmrBridgeResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnDmrBridgeExecute(r MsgVpnApiApiReplaceMsgVpnDmrBridgeRequest) (*MsgVpnDmrBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDmrBridgeResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDmrBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnDmrBridge")
@@ -30593,13 +30889,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDmrBridgeExecute(r MsgVpnApiApiReplaceMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -30616,13 +30912,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnDmrBridgeExecute(r MsgVpnApiApiReplaceMs
 }
 
 type MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	connectionFactoryName string
-	body *MsgVpnJndiConnectionFactory
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnJndiConnectionFactory
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The JNDI Connection Factory object&#39;s attributes.
@@ -30630,11 +30926,13 @@ func (r MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest) Body(body MsgVpnJ
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest {
 	r.select_ = &select_
@@ -30671,9 +30969,9 @@ This has been available since 2.2.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnJndiConnectionFactory(ctx context.Context, msgVpnName string, connectionFactoryName string) MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest {
 	return MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		connectionFactoryName: connectionFactoryName,
 	}
 }
@@ -30682,10 +30980,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiConnectionFactory(ctx context.Contex
 //  @return MsgVpnJndiConnectionFactoryResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiApiReplaceMsgVpnJndiConnectionFactoryRequest) (*MsgVpnJndiConnectionFactoryResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiConnectionFactoryResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiConnectionFactoryResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnJndiConnectionFactory")
@@ -30751,13 +31049,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiConnectionFactoryExecute(r MsgVpnApi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -30774,13 +31072,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiConnectionFactoryExecute(r MsgVpnApi
 }
 
 type MsgVpnApiApiReplaceMsgVpnJndiQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
-	body *MsgVpnJndiQueue
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
+	body           *MsgVpnJndiQueue
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The JNDI Queue object&#39;s attributes.
@@ -30788,11 +31086,13 @@ func (r MsgVpnApiApiReplaceMsgVpnJndiQueueRequest) Body(body MsgVpnJndiQueue) Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnJndiQueueRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnJndiQueueRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnJndiQueueRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnJndiQueueRequest {
 	r.select_ = &select_
@@ -30830,9 +31130,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) ReplaceMsgVpnJndiQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiReplaceMsgVpnJndiQueueRequest {
 	return MsgVpnApiApiReplaceMsgVpnJndiQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -30840,10 +31140,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiQueue(ctx context.Context, msgVpnNam
 //  @return MsgVpnJndiQueueResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnJndiQueueExecute(r MsgVpnApiApiReplaceMsgVpnJndiQueueRequest) (*MsgVpnJndiQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiQueueResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnJndiQueue")
@@ -30909,13 +31209,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiQueueExecute(r MsgVpnApiApiReplaceMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -30932,13 +31232,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiQueueExecute(r MsgVpnApiApiReplaceMs
 }
 
 type MsgVpnApiApiReplaceMsgVpnJndiTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	topicName string
-	body *MsgVpnJndiTopic
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	topicName      string
+	body           *MsgVpnJndiTopic
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The JNDI Topic object&#39;s attributes.
@@ -30946,11 +31246,13 @@ func (r MsgVpnApiApiReplaceMsgVpnJndiTopicRequest) Body(body MsgVpnJndiTopic) Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnJndiTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnJndiTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnJndiTopicRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnJndiTopicRequest {
 	r.select_ = &select_
@@ -30988,9 +31290,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) ReplaceMsgVpnJndiTopic(ctx context.Context, msgVpnName string, topicName string) MsgVpnApiApiReplaceMsgVpnJndiTopicRequest {
 	return MsgVpnApiApiReplaceMsgVpnJndiTopicRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		topicName: topicName,
+		topicName:  topicName,
 	}
 }
 
@@ -30998,10 +31300,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiTopic(ctx context.Context, msgVpnNam
 //  @return MsgVpnJndiTopicResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnJndiTopicExecute(r MsgVpnApiApiReplaceMsgVpnJndiTopicRequest) (*MsgVpnJndiTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiTopicResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnJndiTopic")
@@ -31067,13 +31369,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiTopicExecute(r MsgVpnApiApiReplaceMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -31090,13 +31392,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnJndiTopicExecute(r MsgVpnApiApiReplaceMs
 }
 
 type MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnMqttRetainCache
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnMqttRetainCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The MQTT Retain Cache object&#39;s attributes.
@@ -31104,11 +31406,13 @@ func (r MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest) Body(body MsgVpnMqttRet
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest {
 	r.select_ = &select_
@@ -31146,9 +31450,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) ReplaceMsgVpnMqttRetainCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest {
 	return MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -31156,10 +31460,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttRetainCache(ctx context.Context, msg
 //  @return MsgVpnMqttRetainCacheResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiReplaceMsgVpnMqttRetainCacheRequest) (*MsgVpnMqttRetainCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttRetainCacheResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttRetainCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnMqttRetainCache")
@@ -31225,13 +31529,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiRep
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -31248,14 +31552,14 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiRep
 }
 
 type MsgVpnApiApiReplaceMsgVpnMqttSessionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	body *MsgVpnMqttSession
-	opaquePassword *string
-	select_ *[]string
+	body                     *MsgVpnMqttSession
+	opaquePassword           *string
+	select_                  *[]string
 }
 
 // The MQTT Session object&#39;s attributes.
@@ -31263,11 +31567,13 @@ func (r MsgVpnApiApiReplaceMsgVpnMqttSessionRequest) Body(body MsgVpnMqttSession
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnMqttSessionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnMqttSessionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnMqttSessionRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnMqttSessionRequest {
 	r.select_ = &select_
@@ -31319,10 +31625,10 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnMqttSession(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string) MsgVpnApiApiReplaceMsgVpnMqttSessionRequest {
 	return MsgVpnApiApiReplaceMsgVpnMqttSessionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
 	}
 }
@@ -31331,10 +31637,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttSession(ctx context.Context, msgVpnN
 //  @return MsgVpnMqttSessionResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionExecute(r MsgVpnApiApiReplaceMsgVpnMqttSessionRequest) (*MsgVpnMqttSessionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnMqttSession")
@@ -31401,13 +31707,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionExecute(r MsgVpnApiApiReplace
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -31424,15 +31730,15 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionExecute(r MsgVpnApiApiReplace
 }
 
 type MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	subscriptionTopic string
-	body *MsgVpnMqttSessionSubscription
-	opaquePassword *string
-	select_ *[]string
+	subscriptionTopic        string
+	body                     *MsgVpnMqttSessionSubscription
+	opaquePassword           *string
+	select_                  *[]string
 }
 
 // The Subscription object&#39;s attributes.
@@ -31440,11 +31746,13 @@ func (r MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest) Body(body MsgVp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest {
 	r.select_ = &select_
@@ -31485,12 +31793,12 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionSubscription(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string, subscriptionTopic string) MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest {
 	return MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
-		subscriptionTopic: subscriptionTopic,
+		subscriptionTopic:        subscriptionTopic,
 	}
 }
 
@@ -31498,10 +31806,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionSubscription(ctx context.Cont
 //  @return MsgVpnMqttSessionSubscriptionResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionSubscriptionExecute(r MsgVpnApiApiReplaceMsgVpnMqttSessionSubscriptionRequest) (*MsgVpnMqttSessionSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionSubscriptionResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnMqttSessionSubscription")
@@ -31569,13 +31877,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionSubscriptionExecute(r MsgVpnA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -31592,13 +31900,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnMqttSessionSubscriptionExecute(r MsgVpnA
 }
 
 type MsgVpnApiApiReplaceMsgVpnQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
-	body *MsgVpnQueue
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
+	body           *MsgVpnQueue
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Queue object&#39;s attributes.
@@ -31606,11 +31914,13 @@ func (r MsgVpnApiApiReplaceMsgVpnQueueRequest) Body(body MsgVpnQueue) MsgVpnApiA
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnQueueRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnQueueRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnQueueRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnQueueRequest {
 	r.select_ = &select_
@@ -31664,9 +31974,9 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) ReplaceMsgVpnQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiReplaceMsgVpnQueueRequest {
 	return MsgVpnApiApiReplaceMsgVpnQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -31674,10 +31984,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnQueue(ctx context.Context, msgVpnName st
 //  @return MsgVpnQueueResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnQueueExecute(r MsgVpnApiApiReplaceMsgVpnQueueRequest) (*MsgVpnQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnQueue")
@@ -31743,13 +32053,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnQueueExecute(r MsgVpnApiApiReplaceMsgVpn
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -31766,13 +32076,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnQueueExecute(r MsgVpnApiApiReplaceMsgVpn
 }
 
 type MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	queueTemplateName string
-	body *MsgVpnQueueTemplate
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnQueueTemplate
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The Queue Template object&#39;s attributes.
@@ -31780,11 +32090,13 @@ func (r MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest) Body(body MsgVpnQueueTemp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest {
 	r.select_ = &select_
@@ -31833,9 +32145,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnQueueTemplate(ctx context.Context, msgVpnName string, queueTemplateName string) MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest {
 	return MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		queueTemplateName: queueTemplateName,
 	}
 }
@@ -31844,10 +32156,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnQueueTemplate(ctx context.Context, msgVp
 //  @return MsgVpnQueueTemplateResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnQueueTemplateExecute(r MsgVpnApiApiReplaceMsgVpnQueueTemplateRequest) (*MsgVpnQueueTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueTemplateResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnQueueTemplate")
@@ -31913,13 +32225,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnQueueTemplateExecute(r MsgVpnApiApiRepla
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -31936,13 +32248,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnQueueTemplateExecute(r MsgVpnApiApiRepla
 }
 
 type MsgVpnApiApiReplaceMsgVpnReplayLogRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	replayLogName string
-	body *MsgVpnReplayLog
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	replayLogName  string
+	body           *MsgVpnReplayLog
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Replay Log object&#39;s attributes.
@@ -31950,11 +32262,13 @@ func (r MsgVpnApiApiReplaceMsgVpnReplayLogRequest) Body(body MsgVpnReplayLog) Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnReplayLogRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnReplayLogRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnReplayLogRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnReplayLogRequest {
 	r.select_ = &select_
@@ -31991,9 +32305,9 @@ This has been available since 2.10.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnReplayLog(ctx context.Context, msgVpnName string, replayLogName string) MsgVpnApiApiReplaceMsgVpnReplayLogRequest {
 	return MsgVpnApiApiReplaceMsgVpnReplayLogRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:    a,
+		ctx:           ctx,
+		msgVpnName:    msgVpnName,
 		replayLogName: replayLogName,
 	}
 }
@@ -32002,10 +32316,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnReplayLog(ctx context.Context, msgVpnNam
 //  @return MsgVpnReplayLogResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnReplayLogExecute(r MsgVpnApiApiReplaceMsgVpnReplayLogRequest) (*MsgVpnReplayLogResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplayLogResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplayLogResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnReplayLog")
@@ -32071,13 +32385,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnReplayLogExecute(r MsgVpnApiApiReplaceMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -32094,13 +32408,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnReplayLogExecute(r MsgVpnApiApiReplaceMs
 }
 
 type MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
 	replicatedTopic string
-	body *MsgVpnReplicatedTopic
-	opaquePassword *string
-	select_ *[]string
+	body            *MsgVpnReplicatedTopic
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // The Replicated Topic object&#39;s attributes.
@@ -32108,11 +32422,13 @@ func (r MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest) Body(body MsgVpnReplica
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest {
 	r.select_ = &select_
@@ -32149,9 +32465,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnReplicatedTopic(ctx context.Context, msgVpnName string, replicatedTopic string) MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest {
 	return MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
 		replicatedTopic: replicatedTopic,
 	}
 }
@@ -32160,10 +32476,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnReplicatedTopic(ctx context.Context, msg
 //  @return MsgVpnReplicatedTopicResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnReplicatedTopicExecute(r MsgVpnApiApiReplaceMsgVpnReplicatedTopicRequest) (*MsgVpnReplicatedTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplicatedTopicResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplicatedTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnReplicatedTopic")
@@ -32229,13 +32545,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnReplicatedTopicExecute(r MsgVpnApiApiRep
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -32252,13 +32568,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnReplicatedTopicExecute(r MsgVpnApiApiRep
 }
 
 type MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	body *MsgVpnRestDeliveryPoint
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnRestDeliveryPoint
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The REST Delivery Point object&#39;s attributes.
@@ -32266,11 +32582,13 @@ func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest) Body(body MsgVpnRestD
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest {
 	r.select_ = &select_
@@ -32308,9 +32626,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPoint(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest {
 	return MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -32319,10 +32637,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPoint(ctx context.Context, m
 //  @return MsgVpnRestDeliveryPointResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRequest) (*MsgVpnRestDeliveryPointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnRestDeliveryPoint")
@@ -32388,13 +32706,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiR
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -32411,14 +32729,14 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiR
 }
 
 type MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	body *MsgVpnRestDeliveryPointQueueBinding
-	opaquePassword *string
-	select_ *[]string
+	queueBindingName      string
+	body                  *MsgVpnRestDeliveryPointQueueBinding
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Queue Binding object&#39;s attributes.
@@ -32426,11 +32744,13 @@ func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest) Body(body
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest {
 	r.select_ = &select_
@@ -32469,11 +32789,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBinding(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest {
 	return MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
+		queueBindingName:      queueBindingName,
 	}
 }
 
@@ -32481,10 +32801,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBinding(ctx contex
 //  @return MsgVpnRestDeliveryPointQueueBindingResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingExecute(r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequest) (*MsgVpnRestDeliveryPointQueueBindingResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnRestDeliveryPointQueueBinding")
@@ -32551,13 +32871,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingExecute(r M
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -32574,15 +32894,15 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingExecute(r M
 }
 
 type MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	headerName string
-	body *MsgVpnRestDeliveryPointQueueBindingRequestHeader
-	opaquePassword *string
-	select_ *[]string
+	queueBindingName      string
+	headerName            string
+	body                  *MsgVpnRestDeliveryPointQueueBindingRequestHeader
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Request Header object&#39;s attributes.
@@ -32590,11 +32910,13 @@ func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderReque
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	r.select_ = &select_
@@ -32635,12 +32957,12 @@ This has been available since 2.23.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeader(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string, headerName string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	return MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
-		headerName: headerName,
+		queueBindingName:      queueBindingName,
+		headerName:            headerName,
 	}
 }
 
@@ -32648,10 +32970,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingRequestHead
 //  @return MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderExecute(r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) (*MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnRestDeliveryPointQueueBindingRequestHeader")
@@ -32719,13 +33041,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingRequestHead
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -32742,14 +33064,14 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointQueueBindingRequestHead
 }
 
 type MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	body *MsgVpnRestDeliveryPointRestConsumer
-	opaquePassword *string
-	select_ *[]string
+	restConsumerName      string
+	body                  *MsgVpnRestDeliveryPointRestConsumer
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The REST Consumer object&#39;s attributes.
@@ -32757,11 +33079,13 @@ func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest) Body(body
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest {
 	r.select_ = &select_
@@ -32831,11 +33155,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointRestConsumer(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest {
 	return MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -32843,10 +33167,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointRestConsumer(ctx contex
 //  @return MsgVpnRestDeliveryPointRestConsumerResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointRestConsumerExecute(r MsgVpnApiApiReplaceMsgVpnRestDeliveryPointRestConsumerRequest) (*MsgVpnRestDeliveryPointRestConsumerResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnRestDeliveryPointRestConsumer")
@@ -32913,13 +33237,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointRestConsumerExecute(r M
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -32936,13 +33260,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnRestDeliveryPointRestConsumerExecute(r M
 }
 
 type MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	topicEndpointName string
-	body *MsgVpnTopicEndpoint
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnTopicEndpoint
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The Topic Endpoint object&#39;s attributes.
@@ -32950,11 +33274,13 @@ func (r MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest) Body(body MsgVpnTopicEndp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest {
 	r.select_ = &select_
@@ -33007,9 +33333,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpoint(ctx context.Context, msgVpnName string, topicEndpointName string) MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest {
 	return MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		topicEndpointName: topicEndpointName,
 	}
 }
@@ -33018,10 +33344,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpoint(ctx context.Context, msgVp
 //  @return MsgVpnTopicEndpointResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointExecute(r MsgVpnApiApiReplaceMsgVpnTopicEndpointRequest) (*MsgVpnTopicEndpointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnTopicEndpoint")
@@ -33087,13 +33413,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointExecute(r MsgVpnApiApiRepla
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -33110,13 +33436,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointExecute(r MsgVpnApiApiRepla
 }
 
 type MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                       context.Context
+	ApiService                *MsgVpnApiService
+	msgVpnName                string
 	topicEndpointTemplateName string
-	body *MsgVpnTopicEndpointTemplate
-	opaquePassword *string
-	select_ *[]string
+	body                      *MsgVpnTopicEndpointTemplate
+	opaquePassword            *string
+	select_                   *[]string
 }
 
 // The Topic Endpoint Template object&#39;s attributes.
@@ -33124,11 +33450,13 @@ func (r MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest) Body(body MsgVpnT
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest) Select_(select_ []string) MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest {
 	r.select_ = &select_
@@ -33177,9 +33505,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointTemplate(ctx context.Context, msgVpnName string, topicEndpointTemplateName string) MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest {
 	return MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:                a,
+		ctx:                       ctx,
+		msgVpnName:                msgVpnName,
 		topicEndpointTemplateName: topicEndpointTemplateName,
 	}
 }
@@ -33188,10 +33516,10 @@ func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointTemplate(ctx context.Contex
 //  @return MsgVpnTopicEndpointTemplateResponse
 func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiApiReplaceMsgVpnTopicEndpointTemplateRequest) (*MsgVpnTopicEndpointTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPut
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointTemplateResponse
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.ReplaceMsgVpnTopicEndpointTemplate")
@@ -33257,13 +33585,13 @@ func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointTemplateExecute(r MsgVpnApi
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -33280,12 +33608,12 @@ func (a *MsgVpnApiService) ReplaceMsgVpnTopicEndpointTemplateExecute(r MsgVpnApi
 }
 
 type MsgVpnApiApiUpdateMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	body *MsgVpn
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	body           *MsgVpn
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Message VPN object&#39;s attributes.
@@ -33293,11 +33621,13 @@ func (r MsgVpnApiApiUpdateMsgVpnRequest) Body(body MsgVpn) MsgVpnApiApiUpdateMsg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnRequest {
 	r.select_ = &select_
@@ -33434,7 +33764,7 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) UpdateMsgVpn(ctx context.Context, msgVpnName string) MsgVpnApiApiUpdateMsgVpnRequest {
 	return MsgVpnApiApiUpdateMsgVpnRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
 	}
 }
@@ -33443,10 +33773,10 @@ func (a *MsgVpnApiService) UpdateMsgVpn(ctx context.Context, msgVpnName string) 
 //  @return MsgVpnResponse
 func (a *MsgVpnApiService) UpdateMsgVpnExecute(r MsgVpnApiApiUpdateMsgVpnRequest) (*MsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpn")
@@ -33511,13 +33841,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnExecute(r MsgVpnApiApiUpdateMsgVpnRequest
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -33534,13 +33864,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnExecute(r MsgVpnApiApiUpdateMsgVpnRequest
 }
 
 type MsgVpnApiApiUpdateMsgVpnAclProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	aclProfileName string
-	body *MsgVpnAclProfile
+	body           *MsgVpnAclProfile
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The ACL Profile object&#39;s attributes.
@@ -33548,11 +33878,13 @@ func (r MsgVpnApiApiUpdateMsgVpnAclProfileRequest) Body(body MsgVpnAclProfile) M
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAclProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnAclProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAclProfileRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnAclProfileRequest {
 	r.select_ = &select_
@@ -33589,9 +33921,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnAclProfile(ctx context.Context, msgVpnName string, aclProfileName string) MsgVpnApiApiUpdateMsgVpnAclProfileRequest {
 	return MsgVpnApiApiUpdateMsgVpnAclProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		aclProfileName: aclProfileName,
 	}
 }
@@ -33600,10 +33932,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnAclProfile(ctx context.Context, msgVpnNam
 //  @return MsgVpnAclProfileResponse
 func (a *MsgVpnApiService) UpdateMsgVpnAclProfileExecute(r MsgVpnApiApiUpdateMsgVpnAclProfileRequest) (*MsgVpnAclProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAclProfileResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAclProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnAclProfile")
@@ -33669,13 +34001,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnAclProfileExecute(r MsgVpnApiApiUpdateMsg
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -33692,13 +34024,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnAclProfileExecute(r MsgVpnApiApiUpdateMsg
 }
 
 type MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx              context.Context
+	ApiService       *MsgVpnApiService
+	msgVpnName       string
 	oauthProfileName string
-	body *MsgVpnAuthenticationOauthProfile
-	opaquePassword *string
-	select_ *[]string
+	body             *MsgVpnAuthenticationOauthProfile
+	opaquePassword   *string
+	select_          *[]string
 }
 
 // The OAuth Profile object&#39;s attributes.
@@ -33706,11 +34038,13 @@ func (r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest) Body(body Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest {
 	r.select_ = &select_
@@ -33748,9 +34082,9 @@ This has been available since 2.25.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProfile(ctx context.Context, msgVpnName string, oauthProfileName string) MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest {
 	return MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:       a,
+		ctx:              ctx,
+		msgVpnName:       msgVpnName,
 		oauthProfileName: oauthProfileName,
 	}
 }
@@ -33759,10 +34093,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProfile(ctx context.Co
 //  @return MsgVpnAuthenticationOauthProfileResponse
 func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProfileExecute(r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProfileRequest) (*MsgVpnAuthenticationOauthProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProfileResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnAuthenticationOauthProfile")
@@ -33828,13 +34162,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProfileExecute(r MsgVp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -33851,13 +34185,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProfileExecute(r MsgVp
 }
 
 type MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	oauthProviderName string
-	body *MsgVpnAuthenticationOauthProvider
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnAuthenticationOauthProvider
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The OAuth Provider object&#39;s attributes.
@@ -33865,11 +34199,13 @@ func (r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest) Body(body Ms
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest {
 	r.select_ = &select_
@@ -33928,9 +34264,9 @@ Deprecated
 */
 func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProvider(ctx context.Context, msgVpnName string, oauthProviderName string) MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest {
 	return MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		oauthProviderName: oauthProviderName,
 	}
 }
@@ -33940,10 +34276,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProvider(ctx context.C
 // Deprecated
 func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProviderExecute(r MsgVpnApiApiUpdateMsgVpnAuthenticationOauthProviderRequest) (*MsgVpnAuthenticationOauthProviderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthenticationOauthProviderResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthenticationOauthProviderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnAuthenticationOauthProvider")
@@ -34009,13 +34345,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProviderExecute(r MsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -34032,13 +34368,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthenticationOauthProviderExecute(r MsgV
 }
 
 type MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                    context.Context
+	ApiService             *MsgVpnApiService
+	msgVpnName             string
 	authorizationGroupName string
-	body *MsgVpnAuthorizationGroup
-	opaquePassword *string
-	select_ *[]string
+	body                   *MsgVpnAuthorizationGroup
+	opaquePassword         *string
+	select_                *[]string
 }
 
 // The Authorization Group object&#39;s attributes.
@@ -34046,11 +34382,13 @@ func (r MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest) Body(body MsgVpnAutho
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest {
 	r.select_ = &select_
@@ -34101,9 +34439,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnAuthorizationGroup(ctx context.Context, msgVpnName string, authorizationGroupName string) MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest {
 	return MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:             a,
+		ctx:                    ctx,
+		msgVpnName:             msgVpnName,
 		authorizationGroupName: authorizationGroupName,
 	}
 }
@@ -34112,10 +34450,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthorizationGroup(ctx context.Context, m
 //  @return MsgVpnAuthorizationGroupResponse
 func (a *MsgVpnApiService) UpdateMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiUpdateMsgVpnAuthorizationGroupRequest) (*MsgVpnAuthorizationGroupResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnAuthorizationGroupResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnAuthorizationGroupResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnAuthorizationGroup")
@@ -34181,13 +34519,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiU
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -34204,14 +34542,14 @@ func (a *MsgVpnApiService) UpdateMsgVpnAuthorizationGroupExecute(r MsgVpnApiApiU
 }
 
 type MsgVpnApiApiUpdateMsgVpnBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
+	ctx                 context.Context
+	ApiService          *MsgVpnApiService
+	msgVpnName          string
+	bridgeName          string
 	bridgeVirtualRouter string
-	body *MsgVpnBridge
-	opaquePassword *string
-	select_ *[]string
+	body                *MsgVpnBridge
+	opaquePassword      *string
+	select_             *[]string
 }
 
 // The Bridge object&#39;s attributes.
@@ -34219,11 +34557,13 @@ func (r MsgVpnApiApiUpdateMsgVpnBridgeRequest) Body(body MsgVpnBridge) MsgVpnApi
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnBridgeRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnBridgeRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnBridgeRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnBridgeRequest {
 	r.select_ = &select_
@@ -34280,10 +34620,10 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnBridge(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string) MsgVpnApiApiUpdateMsgVpnBridgeRequest {
 	return MsgVpnApiApiUpdateMsgVpnBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
+		ApiService:          a,
+		ctx:                 ctx,
+		msgVpnName:          msgVpnName,
+		bridgeName:          bridgeName,
 		bridgeVirtualRouter: bridgeVirtualRouter,
 	}
 }
@@ -34292,10 +34632,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnBridge(ctx context.Context, msgVpnName st
 //  @return MsgVpnBridgeResponse
 func (a *MsgVpnApiService) UpdateMsgVpnBridgeExecute(r MsgVpnApiApiUpdateMsgVpnBridgeRequest) (*MsgVpnBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnBridge")
@@ -34362,13 +34702,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnBridgeExecute(r MsgVpnApiApiUpdateMsgVpnB
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -34385,17 +34725,17 @@ func (a *MsgVpnApiService) UpdateMsgVpnBridgeExecute(r MsgVpnApiApiUpdateMsgVpnB
 }
 
 type MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	bridgeName string
-	bridgeVirtualRouter string
-	remoteMsgVpnName string
-	remoteMsgVpnLocation string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
+	bridgeName            string
+	bridgeVirtualRouter   string
+	remoteMsgVpnName      string
+	remoteMsgVpnLocation  string
 	remoteMsgVpnInterface string
-	body *MsgVpnBridgeRemoteMsgVpn
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnBridgeRemoteMsgVpn
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Remote Message VPN object&#39;s attributes.
@@ -34403,11 +34743,13 @@ func (r MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest) Body(body MsgVpnBridg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest {
 	r.select_ = &select_
@@ -34467,13 +34809,13 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnBridgeRemoteMsgVpn(ctx context.Context, msgVpnName string, bridgeName string, bridgeVirtualRouter string, remoteMsgVpnName string, remoteMsgVpnLocation string, remoteMsgVpnInterface string) MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest {
 	return MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		bridgeName: bridgeName,
-		bridgeVirtualRouter: bridgeVirtualRouter,
-		remoteMsgVpnName: remoteMsgVpnName,
-		remoteMsgVpnLocation: remoteMsgVpnLocation,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
+		bridgeName:            bridgeName,
+		bridgeVirtualRouter:   bridgeVirtualRouter,
+		remoteMsgVpnName:      remoteMsgVpnName,
+		remoteMsgVpnLocation:  remoteMsgVpnLocation,
 		remoteMsgVpnInterface: remoteMsgVpnInterface,
 	}
 }
@@ -34482,10 +34824,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnBridgeRemoteMsgVpn(ctx context.Context, m
 //  @return MsgVpnBridgeRemoteMsgVpnResponse
 func (a *MsgVpnApiService) UpdateMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiUpdateMsgVpnBridgeRemoteMsgVpnRequest) (*MsgVpnBridgeRemoteMsgVpnResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnBridgeRemoteMsgVpnResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnBridgeRemoteMsgVpnResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnBridgeRemoteMsgVpn")
@@ -34555,13 +34897,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiU
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -34578,13 +34920,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnBridgeRemoteMsgVpnExecute(r MsgVpnApiApiU
 }
 
 type MsgVpnApiApiUpdateMsgVpnClientProfileRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	clientProfileName string
-	body *MsgVpnClientProfile
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnClientProfile
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The Client Profile object&#39;s attributes.
@@ -34592,11 +34934,13 @@ func (r MsgVpnApiApiUpdateMsgVpnClientProfileRequest) Body(body MsgVpnClientProf
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnClientProfileRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnClientProfileRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnClientProfileRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnClientProfileRequest {
 	r.select_ = &select_
@@ -34650,9 +34994,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnClientProfile(ctx context.Context, msgVpnName string, clientProfileName string) MsgVpnApiApiUpdateMsgVpnClientProfileRequest {
 	return MsgVpnApiApiUpdateMsgVpnClientProfileRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		clientProfileName: clientProfileName,
 	}
 }
@@ -34661,10 +35005,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnClientProfile(ctx context.Context, msgVpn
 //  @return MsgVpnClientProfileResponse
 func (a *MsgVpnApiService) UpdateMsgVpnClientProfileExecute(r MsgVpnApiApiUpdateMsgVpnClientProfileRequest) (*MsgVpnClientProfileResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientProfileResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientProfileResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnClientProfile")
@@ -34730,13 +35074,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnClientProfileExecute(r MsgVpnApiApiUpdate
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -34753,13 +35097,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnClientProfileExecute(r MsgVpnApiApiUpdate
 }
 
 type MsgVpnApiApiUpdateMsgVpnClientUsernameRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	clientUsername string
-	body *MsgVpnClientUsername
+	body           *MsgVpnClientUsername
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Client Username object&#39;s attributes.
@@ -34767,11 +35111,13 @@ func (r MsgVpnApiApiUpdateMsgVpnClientUsernameRequest) Body(body MsgVpnClientUse
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnClientUsernameRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnClientUsernameRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnClientUsernameRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnClientUsernameRequest {
 	r.select_ = &select_
@@ -34811,9 +35157,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnClientUsername(ctx context.Context, msgVpnName string, clientUsername string) MsgVpnApiApiUpdateMsgVpnClientUsernameRequest {
 	return MsgVpnApiApiUpdateMsgVpnClientUsernameRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		clientUsername: clientUsername,
 	}
 }
@@ -34822,10 +35168,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnClientUsername(ctx context.Context, msgVp
 //  @return MsgVpnClientUsernameResponse
 func (a *MsgVpnApiService) UpdateMsgVpnClientUsernameExecute(r MsgVpnApiApiUpdateMsgVpnClientUsernameRequest) (*MsgVpnClientUsernameResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnClientUsernameResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnClientUsernameResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnClientUsername")
@@ -34891,13 +35237,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnClientUsernameExecute(r MsgVpnApiApiUpdat
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -34914,13 +35260,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnClientUsernameExecute(r MsgVpnApiApiUpdat
 }
 
 type MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnDistributedCache
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnDistributedCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Distributed Cache object&#39;s attributes.
@@ -34928,11 +35274,13 @@ func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest) Body(body MsgVpnDistrib
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest {
 	r.select_ = &select_
@@ -34980,9 +35328,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) UpdateMsgVpnDistributedCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest {
 	return MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -34990,10 +35338,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCache(ctx context.Context, msg
 //  @return MsgVpnDistributedCacheResponse
 func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheExecute(r MsgVpnApiApiUpdateMsgVpnDistributedCacheRequest) (*MsgVpnDistributedCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnDistributedCache")
@@ -35059,13 +35407,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheExecute(r MsgVpnApiApiUpd
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -35082,14 +35430,14 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheExecute(r MsgVpnApiApiUpd
 }
 
 type MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	body *MsgVpnDistributedCacheCluster
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	body           *MsgVpnDistributedCacheCluster
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Cluster object&#39;s attributes.
@@ -35097,11 +35445,13 @@ func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest) Body(body MsgVpn
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest {
 	r.select_ = &select_
@@ -35152,10 +35502,10 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheCluster(ctx context.Context, msgVpnName string, cacheName string, clusterName string) MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest {
 	return MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		ApiService:  a,
+		ctx:         ctx,
+		msgVpnName:  msgVpnName,
+		cacheName:   cacheName,
 		clusterName: clusterName,
 	}
 }
@@ -35164,10 +35514,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheCluster(ctx context.Conte
 //  @return MsgVpnDistributedCacheClusterResponse
 func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterExecute(r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterRequest) (*MsgVpnDistributedCacheClusterResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnDistributedCacheCluster")
@@ -35234,13 +35584,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -35257,15 +35607,15 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	clusterName string
-	instanceName string
-	body *MsgVpnDistributedCacheClusterInstance
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	clusterName    string
+	instanceName   string
+	body           *MsgVpnDistributedCacheClusterInstance
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Cache Instance object&#39;s attributes.
@@ -35273,11 +35623,13 @@ func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest) Body(bod
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest {
 	r.select_ = &select_
@@ -35318,11 +35670,11 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterInstance(ctx context.Context, msgVpnName string, cacheName string, clusterName string, instanceName string) MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest {
 	return MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		cacheName: cacheName,
-		clusterName: clusterName,
+		ApiService:   a,
+		ctx:          ctx,
+		msgVpnName:   msgVpnName,
+		cacheName:    cacheName,
+		clusterName:  clusterName,
 		instanceName: instanceName,
 	}
 }
@@ -35331,10 +35683,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterInstance(ctx conte
 //  @return MsgVpnDistributedCacheClusterInstanceResponse
 func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterInstanceExecute(r MsgVpnApiApiUpdateMsgVpnDistributedCacheClusterInstanceRequest) (*MsgVpnDistributedCacheClusterInstanceResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDistributedCacheClusterInstanceResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDistributedCacheClusterInstanceResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnDistributedCacheClusterInstance")
@@ -35402,13 +35754,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterInstanceExecute(r 
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -35425,13 +35777,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnDistributedCacheClusterInstanceExecute(r 
 }
 
 type MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
 	remoteNodeName string
-	body *MsgVpnDmrBridge
+	body           *MsgVpnDmrBridge
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The DMR Bridge object&#39;s attributes.
@@ -35439,11 +35791,13 @@ func (r MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest) Body(body MsgVpnDmrBridge) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest {
 	r.select_ = &select_
@@ -35480,9 +35834,9 @@ This has been available since 2.11.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnDmrBridge(ctx context.Context, msgVpnName string, remoteNodeName string) MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest {
 	return MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:     a,
+		ctx:            ctx,
+		msgVpnName:     msgVpnName,
 		remoteNodeName: remoteNodeName,
 	}
 }
@@ -35491,10 +35845,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnDmrBridge(ctx context.Context, msgVpnName
 //  @return MsgVpnDmrBridgeResponse
 func (a *MsgVpnApiService) UpdateMsgVpnDmrBridgeExecute(r MsgVpnApiApiUpdateMsgVpnDmrBridgeRequest) (*MsgVpnDmrBridgeResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnDmrBridgeResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnDmrBridgeResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnDmrBridge")
@@ -35560,13 +35914,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnDmrBridgeExecute(r MsgVpnApiApiUpdateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -35583,13 +35937,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnDmrBridgeExecute(r MsgVpnApiApiUpdateMsgV
 }
 
 type MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	connectionFactoryName string
-	body *MsgVpnJndiConnectionFactory
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnJndiConnectionFactory
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The JNDI Connection Factory object&#39;s attributes.
@@ -35597,11 +35951,13 @@ func (r MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest) Body(body MsgVpnJn
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest {
 	r.select_ = &select_
@@ -35638,9 +35994,9 @@ This has been available since 2.2.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnJndiConnectionFactory(ctx context.Context, msgVpnName string, connectionFactoryName string) MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest {
 	return MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		connectionFactoryName: connectionFactoryName,
 	}
 }
@@ -35649,10 +36005,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiConnectionFactory(ctx context.Context
 //  @return MsgVpnJndiConnectionFactoryResponse
 func (a *MsgVpnApiService) UpdateMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiApiUpdateMsgVpnJndiConnectionFactoryRequest) (*MsgVpnJndiConnectionFactoryResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiConnectionFactoryResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiConnectionFactoryResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnJndiConnectionFactory")
@@ -35718,13 +36074,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -35741,13 +36097,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiConnectionFactoryExecute(r MsgVpnApiA
 }
 
 type MsgVpnApiApiUpdateMsgVpnJndiQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
-	body *MsgVpnJndiQueue
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
+	body           *MsgVpnJndiQueue
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The JNDI Queue object&#39;s attributes.
@@ -35755,11 +36111,13 @@ func (r MsgVpnApiApiUpdateMsgVpnJndiQueueRequest) Body(body MsgVpnJndiQueue) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnJndiQueueRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnJndiQueueRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnJndiQueueRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnJndiQueueRequest {
 	r.select_ = &select_
@@ -35797,9 +36155,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) UpdateMsgVpnJndiQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiUpdateMsgVpnJndiQueueRequest {
 	return MsgVpnApiApiUpdateMsgVpnJndiQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -35807,10 +36165,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiQueue(ctx context.Context, msgVpnName
 //  @return MsgVpnJndiQueueResponse
 func (a *MsgVpnApiService) UpdateMsgVpnJndiQueueExecute(r MsgVpnApiApiUpdateMsgVpnJndiQueueRequest) (*MsgVpnJndiQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiQueueResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnJndiQueue")
@@ -35876,13 +36234,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiQueueExecute(r MsgVpnApiApiUpdateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -35899,13 +36257,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiQueueExecute(r MsgVpnApiApiUpdateMsgV
 }
 
 type MsgVpnApiApiUpdateMsgVpnJndiTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	topicName string
-	body *MsgVpnJndiTopic
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	topicName      string
+	body           *MsgVpnJndiTopic
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The JNDI Topic object&#39;s attributes.
@@ -35913,11 +36271,13 @@ func (r MsgVpnApiApiUpdateMsgVpnJndiTopicRequest) Body(body MsgVpnJndiTopic) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnJndiTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnJndiTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnJndiTopicRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnJndiTopicRequest {
 	r.select_ = &select_
@@ -35955,9 +36315,9 @@ This has been available since 2.2.
 func (a *MsgVpnApiService) UpdateMsgVpnJndiTopic(ctx context.Context, msgVpnName string, topicName string) MsgVpnApiApiUpdateMsgVpnJndiTopicRequest {
 	return MsgVpnApiApiUpdateMsgVpnJndiTopicRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		topicName: topicName,
+		topicName:  topicName,
 	}
 }
 
@@ -35965,10 +36325,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiTopic(ctx context.Context, msgVpnName
 //  @return MsgVpnJndiTopicResponse
 func (a *MsgVpnApiService) UpdateMsgVpnJndiTopicExecute(r MsgVpnApiApiUpdateMsgVpnJndiTopicRequest) (*MsgVpnJndiTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnJndiTopicResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnJndiTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnJndiTopic")
@@ -36034,13 +36394,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiTopicExecute(r MsgVpnApiApiUpdateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -36057,13 +36417,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnJndiTopicExecute(r MsgVpnApiApiUpdateMsgV
 }
 
 type MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	cacheName string
-	body *MsgVpnMqttRetainCache
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	cacheName      string
+	body           *MsgVpnMqttRetainCache
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The MQTT Retain Cache object&#39;s attributes.
@@ -36071,11 +36431,13 @@ func (r MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest) Body(body MsgVpnMqttReta
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest {
 	r.select_ = &select_
@@ -36113,9 +36475,9 @@ This has been available since 2.11.
 func (a *MsgVpnApiService) UpdateMsgVpnMqttRetainCache(ctx context.Context, msgVpnName string, cacheName string) MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest {
 	return MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		cacheName: cacheName,
+		cacheName:  cacheName,
 	}
 }
 
@@ -36123,10 +36485,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttRetainCache(ctx context.Context, msgV
 //  @return MsgVpnMqttRetainCacheResponse
 func (a *MsgVpnApiService) UpdateMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiUpdateMsgVpnMqttRetainCacheRequest) (*MsgVpnMqttRetainCacheResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttRetainCacheResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttRetainCacheResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnMqttRetainCache")
@@ -36192,13 +36554,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiUpda
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -36215,14 +36577,14 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttRetainCacheExecute(r MsgVpnApiApiUpda
 }
 
 type MsgVpnApiApiUpdateMsgVpnMqttSessionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	body *MsgVpnMqttSession
-	opaquePassword *string
-	select_ *[]string
+	body                     *MsgVpnMqttSession
+	opaquePassword           *string
+	select_                  *[]string
 }
 
 // The MQTT Session object&#39;s attributes.
@@ -36230,11 +36592,13 @@ func (r MsgVpnApiApiUpdateMsgVpnMqttSessionRequest) Body(body MsgVpnMqttSession)
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnMqttSessionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnMqttSessionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnMqttSessionRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnMqttSessionRequest {
 	r.select_ = &select_
@@ -36286,10 +36650,10 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnMqttSession(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string) MsgVpnApiApiUpdateMsgVpnMqttSessionRequest {
 	return MsgVpnApiApiUpdateMsgVpnMqttSessionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
 	}
 }
@@ -36298,10 +36662,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttSession(ctx context.Context, msgVpnNa
 //  @return MsgVpnMqttSessionResponse
 func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionExecute(r MsgVpnApiApiUpdateMsgVpnMqttSessionRequest) (*MsgVpnMqttSessionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnMqttSession")
@@ -36368,13 +36732,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionExecute(r MsgVpnApiApiUpdateMs
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -36391,15 +36755,15 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionExecute(r MsgVpnApiApiUpdateMs
 }
 
 type MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	mqttSessionClientId string
+	ctx                      context.Context
+	ApiService               *MsgVpnApiService
+	msgVpnName               string
+	mqttSessionClientId      string
 	mqttSessionVirtualRouter string
-	subscriptionTopic string
-	body *MsgVpnMqttSessionSubscription
-	opaquePassword *string
-	select_ *[]string
+	subscriptionTopic        string
+	body                     *MsgVpnMqttSessionSubscription
+	opaquePassword           *string
+	select_                  *[]string
 }
 
 // The Subscription object&#39;s attributes.
@@ -36407,11 +36771,13 @@ func (r MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest) Body(body MsgVpn
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest {
 	r.select_ = &select_
@@ -36452,12 +36818,12 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionSubscription(ctx context.Context, msgVpnName string, mqttSessionClientId string, mqttSessionVirtualRouter string, subscriptionTopic string) MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest {
 	return MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
-		mqttSessionClientId: mqttSessionClientId,
+		ApiService:               a,
+		ctx:                      ctx,
+		msgVpnName:               msgVpnName,
+		mqttSessionClientId:      mqttSessionClientId,
 		mqttSessionVirtualRouter: mqttSessionVirtualRouter,
-		subscriptionTopic: subscriptionTopic,
+		subscriptionTopic:        subscriptionTopic,
 	}
 }
 
@@ -36465,10 +36831,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionSubscription(ctx context.Conte
 //  @return MsgVpnMqttSessionSubscriptionResponse
 func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionSubscriptionExecute(r MsgVpnApiApiUpdateMsgVpnMqttSessionSubscriptionRequest) (*MsgVpnMqttSessionSubscriptionResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnMqttSessionSubscriptionResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnMqttSessionSubscriptionResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnMqttSessionSubscription")
@@ -36536,13 +36902,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionSubscriptionExecute(r MsgVpnAp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -36559,13 +36925,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnMqttSessionSubscriptionExecute(r MsgVpnAp
 }
 
 type MsgVpnApiApiUpdateMsgVpnQueueRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	queueName string
-	body *MsgVpnQueue
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	queueName      string
+	body           *MsgVpnQueue
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Queue object&#39;s attributes.
@@ -36573,11 +36939,13 @@ func (r MsgVpnApiApiUpdateMsgVpnQueueRequest) Body(body MsgVpnQueue) MsgVpnApiAp
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnQueueRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnQueueRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnQueueRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnQueueRequest {
 	r.select_ = &select_
@@ -36631,9 +36999,9 @@ This has been available since 2.0.
 func (a *MsgVpnApiService) UpdateMsgVpnQueue(ctx context.Context, msgVpnName string, queueName string) MsgVpnApiApiUpdateMsgVpnQueueRequest {
 	return MsgVpnApiApiUpdateMsgVpnQueueRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 		msgVpnName: msgVpnName,
-		queueName: queueName,
+		queueName:  queueName,
 	}
 }
 
@@ -36641,10 +37009,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnQueue(ctx context.Context, msgVpnName str
 //  @return MsgVpnQueueResponse
 func (a *MsgVpnApiService) UpdateMsgVpnQueueExecute(r MsgVpnApiApiUpdateMsgVpnQueueRequest) (*MsgVpnQueueResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnQueue")
@@ -36710,13 +37078,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnQueueExecute(r MsgVpnApiApiUpdateMsgVpnQu
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -36733,13 +37101,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnQueueExecute(r MsgVpnApiApiUpdateMsgVpnQu
 }
 
 type MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	queueTemplateName string
-	body *MsgVpnQueueTemplate
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnQueueTemplate
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The Queue Template object&#39;s attributes.
@@ -36747,11 +37115,13 @@ func (r MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest) Body(body MsgVpnQueueTempl
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest {
 	r.select_ = &select_
@@ -36800,9 +37170,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnQueueTemplate(ctx context.Context, msgVpnName string, queueTemplateName string) MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest {
 	return MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		queueTemplateName: queueTemplateName,
 	}
 }
@@ -36811,10 +37181,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnQueueTemplate(ctx context.Context, msgVpn
 //  @return MsgVpnQueueTemplateResponse
 func (a *MsgVpnApiService) UpdateMsgVpnQueueTemplateExecute(r MsgVpnApiApiUpdateMsgVpnQueueTemplateRequest) (*MsgVpnQueueTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnQueueTemplateResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnQueueTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnQueueTemplate")
@@ -36880,13 +37250,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnQueueTemplateExecute(r MsgVpnApiApiUpdate
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -36903,13 +37273,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnQueueTemplateExecute(r MsgVpnApiApiUpdate
 }
 
 type MsgVpnApiApiUpdateMsgVpnReplayLogRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
-	replayLogName string
-	body *MsgVpnReplayLog
+	ctx            context.Context
+	ApiService     *MsgVpnApiService
+	msgVpnName     string
+	replayLogName  string
+	body           *MsgVpnReplayLog
 	opaquePassword *string
-	select_ *[]string
+	select_        *[]string
 }
 
 // The Replay Log object&#39;s attributes.
@@ -36917,11 +37287,13 @@ func (r MsgVpnApiApiUpdateMsgVpnReplayLogRequest) Body(body MsgVpnReplayLog) Msg
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnReplayLogRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnReplayLogRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnReplayLogRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnReplayLogRequest {
 	r.select_ = &select_
@@ -36958,9 +37330,9 @@ This has been available since 2.10.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnReplayLog(ctx context.Context, msgVpnName string, replayLogName string) MsgVpnApiApiUpdateMsgVpnReplayLogRequest {
 	return MsgVpnApiApiUpdateMsgVpnReplayLogRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:    a,
+		ctx:           ctx,
+		msgVpnName:    msgVpnName,
 		replayLogName: replayLogName,
 	}
 }
@@ -36969,10 +37341,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnReplayLog(ctx context.Context, msgVpnName
 //  @return MsgVpnReplayLogResponse
 func (a *MsgVpnApiService) UpdateMsgVpnReplayLogExecute(r MsgVpnApiApiUpdateMsgVpnReplayLogRequest) (*MsgVpnReplayLogResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplayLogResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplayLogResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnReplayLog")
@@ -37038,13 +37410,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnReplayLogExecute(r MsgVpnApiApiUpdateMsgV
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -37061,13 +37433,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnReplayLogExecute(r MsgVpnApiApiUpdateMsgV
 }
 
 type MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx             context.Context
+	ApiService      *MsgVpnApiService
+	msgVpnName      string
 	replicatedTopic string
-	body *MsgVpnReplicatedTopic
-	opaquePassword *string
-	select_ *[]string
+	body            *MsgVpnReplicatedTopic
+	opaquePassword  *string
+	select_         *[]string
 }
 
 // The Replicated Topic object&#39;s attributes.
@@ -37075,11 +37447,13 @@ func (r MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest) Body(body MsgVpnReplicat
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest {
 	r.select_ = &select_
@@ -37116,9 +37490,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnReplicatedTopic(ctx context.Context, msgVpnName string, replicatedTopic string) MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest {
 	return MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:      a,
+		ctx:             ctx,
+		msgVpnName:      msgVpnName,
 		replicatedTopic: replicatedTopic,
 	}
 }
@@ -37127,10 +37501,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnReplicatedTopic(ctx context.Context, msgV
 //  @return MsgVpnReplicatedTopicResponse
 func (a *MsgVpnApiService) UpdateMsgVpnReplicatedTopicExecute(r MsgVpnApiApiUpdateMsgVpnReplicatedTopicRequest) (*MsgVpnReplicatedTopicResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnReplicatedTopicResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnReplicatedTopicResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnReplicatedTopic")
@@ -37196,13 +37570,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnReplicatedTopicExecute(r MsgVpnApiApiUpda
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -37219,13 +37593,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnReplicatedTopicExecute(r MsgVpnApiApiUpda
 }
 
 type MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	body *MsgVpnRestDeliveryPoint
-	opaquePassword *string
-	select_ *[]string
+	body                  *MsgVpnRestDeliveryPoint
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The REST Delivery Point object&#39;s attributes.
@@ -37233,11 +37607,13 @@ func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest) Body(body MsgVpnRestDe
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest {
 	r.select_ = &select_
@@ -37275,9 +37651,9 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPoint(ctx context.Context, msgVpnName string, restDeliveryPointName string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest {
 	return MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
 	}
 }
@@ -37286,10 +37662,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPoint(ctx context.Context, ms
 //  @return MsgVpnRestDeliveryPointResponse
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRequest) (*MsgVpnRestDeliveryPointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnRestDeliveryPoint")
@@ -37355,13 +37731,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiUp
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -37378,14 +37754,14 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointExecute(r MsgVpnApiApiUp
 }
 
 type MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	body *MsgVpnRestDeliveryPointQueueBinding
-	opaquePassword *string
-	select_ *[]string
+	queueBindingName      string
+	body                  *MsgVpnRestDeliveryPointQueueBinding
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Queue Binding object&#39;s attributes.
@@ -37393,11 +37769,13 @@ func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest) Body(body 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest {
 	r.select_ = &select_
@@ -37436,11 +37814,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBinding(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest {
 	return MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
+		queueBindingName:      queueBindingName,
 	}
 }
 
@@ -37448,10 +37826,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBinding(ctx context
 //  @return MsgVpnRestDeliveryPointQueueBindingResponse
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingExecute(r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequest) (*MsgVpnRestDeliveryPointQueueBindingResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnRestDeliveryPointQueueBinding")
@@ -37518,13 +37896,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -37541,15 +37919,15 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingExecute(r Ms
 }
 
 type MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	queueBindingName string
-	headerName string
-	body *MsgVpnRestDeliveryPointQueueBindingRequestHeader
-	opaquePassword *string
-	select_ *[]string
+	queueBindingName      string
+	headerName            string
+	body                  *MsgVpnRestDeliveryPointQueueBindingRequestHeader
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The Request Header object&#39;s attributes.
@@ -37557,11 +37935,13 @@ func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderReques
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	r.select_ = &select_
@@ -37602,12 +37982,12 @@ This has been available since 2.23.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingRequestHeader(ctx context.Context, msgVpnName string, restDeliveryPointName string, queueBindingName string, headerName string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest {
 	return MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		queueBindingName: queueBindingName,
-		headerName: headerName,
+		queueBindingName:      queueBindingName,
+		headerName:            headerName,
 	}
 }
 
@@ -37615,10 +37995,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingRequestHeade
 //  @return MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderExecute(r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointQueueBindingRequestHeaderRequest) (*MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointQueueBindingRequestHeaderResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnRestDeliveryPointQueueBindingRequestHeader")
@@ -37686,13 +38066,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingRequestHeade
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -37709,14 +38089,14 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointQueueBindingRequestHeade
 }
 
 type MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                   context.Context
+	ApiService            *MsgVpnApiService
+	msgVpnName            string
 	restDeliveryPointName string
-	restConsumerName string
-	body *MsgVpnRestDeliveryPointRestConsumer
-	opaquePassword *string
-	select_ *[]string
+	restConsumerName      string
+	body                  *MsgVpnRestDeliveryPointRestConsumer
+	opaquePassword        *string
+	select_               *[]string
 }
 
 // The REST Consumer object&#39;s attributes.
@@ -37724,11 +38104,13 @@ func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest) Body(body 
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest {
 	r.select_ = &select_
@@ -37798,11 +38180,11 @@ This has been available since 2.0.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointRestConsumer(ctx context.Context, msgVpnName string, restDeliveryPointName string, restConsumerName string) MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest {
 	return MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:            a,
+		ctx:                   ctx,
+		msgVpnName:            msgVpnName,
 		restDeliveryPointName: restDeliveryPointName,
-		restConsumerName: restConsumerName,
+		restConsumerName:      restConsumerName,
 	}
 }
 
@@ -37810,10 +38192,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointRestConsumer(ctx context
 //  @return MsgVpnRestDeliveryPointRestConsumerResponse
 func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointRestConsumerExecute(r MsgVpnApiApiUpdateMsgVpnRestDeliveryPointRestConsumerRequest) (*MsgVpnRestDeliveryPointRestConsumerResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnRestDeliveryPointRestConsumerResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnRestDeliveryPointRestConsumerResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnRestDeliveryPointRestConsumer")
@@ -37880,13 +38262,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointRestConsumerExecute(r Ms
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -37903,13 +38285,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnRestDeliveryPointRestConsumerExecute(r Ms
 }
 
 type MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx               context.Context
+	ApiService        *MsgVpnApiService
+	msgVpnName        string
 	topicEndpointName string
-	body *MsgVpnTopicEndpoint
-	opaquePassword *string
-	select_ *[]string
+	body              *MsgVpnTopicEndpoint
+	opaquePassword    *string
+	select_           *[]string
 }
 
 // The Topic Endpoint object&#39;s attributes.
@@ -37917,11 +38299,13 @@ func (r MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest) Body(body MsgVpnTopicEndpo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest {
 	r.select_ = &select_
@@ -37974,9 +38358,9 @@ This has been available since 2.1.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpoint(ctx context.Context, msgVpnName string, topicEndpointName string) MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest {
 	return MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:        a,
+		ctx:               ctx,
+		msgVpnName:        msgVpnName,
 		topicEndpointName: topicEndpointName,
 	}
 }
@@ -37985,10 +38369,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpoint(ctx context.Context, msgVpn
 //  @return MsgVpnTopicEndpointResponse
 func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpointExecute(r MsgVpnApiApiUpdateMsgVpnTopicEndpointRequest) (*MsgVpnTopicEndpointResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnTopicEndpoint")
@@ -38054,13 +38438,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpointExecute(r MsgVpnApiApiUpdate
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -38077,13 +38461,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpointExecute(r MsgVpnApiApiUpdate
 }
 
 type MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest struct {
-	ctx context.Context
-	ApiService *MsgVpnApiService
-	msgVpnName string
+	ctx                       context.Context
+	ApiService                *MsgVpnApiService
+	msgVpnName                string
 	topicEndpointTemplateName string
-	body *MsgVpnTopicEndpointTemplate
-	opaquePassword *string
-	select_ *[]string
+	body                      *MsgVpnTopicEndpointTemplate
+	opaquePassword            *string
+	select_                   *[]string
 }
 
 // The Topic Endpoint Template object&#39;s attributes.
@@ -38091,11 +38475,13 @@ func (r MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest) Body(body MsgVpnTo
 	r.body = &body
 	return r
 }
+
 // Accept opaque attributes in the request or return opaque attributes in the response, encrypted with the specified password. See the documentation for the &#x60;opaquePassword&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest) OpaquePassword(opaquePassword string) MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest {
 	r.opaquePassword = &opaquePassword
 	return r
 }
+
 // Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. See the documentation for the &#x60;select&#x60; parameter.
 func (r MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest) Select_(select_ []string) MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest {
 	r.select_ = &select_
@@ -38144,9 +38530,9 @@ This has been available since 2.14.
 */
 func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpointTemplate(ctx context.Context, msgVpnName string, topicEndpointTemplateName string) MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest {
 	return MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest{
-		ApiService: a,
-		ctx: ctx,
-		msgVpnName: msgVpnName,
+		ApiService:                a,
+		ctx:                       ctx,
+		msgVpnName:                msgVpnName,
 		topicEndpointTemplateName: topicEndpointTemplateName,
 	}
 }
@@ -38155,10 +38541,10 @@ func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpointTemplate(ctx context.Context
 //  @return MsgVpnTopicEndpointTemplateResponse
 func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiApiUpdateMsgVpnTopicEndpointTemplateRequest) (*MsgVpnTopicEndpointTemplateResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPatch
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *MsgVpnTopicEndpointTemplateResponse
+		localVarHTTPMethod  = http.MethodPatch
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *MsgVpnTopicEndpointTemplateResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MsgVpnApiService.UpdateMsgVpnTopicEndpointTemplate")
@@ -38224,13 +38610,13 @@ func (a *MsgVpnApiService) UpdateMsgVpnTopicEndpointTemplateExecute(r MsgVpnApiA
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-			var v SempMetaOnlyResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.model = v
+		var v SempMetaOnlyResponse
+		err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+		if err != nil {
+			newErr.error = err.Error()
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		newErr.model = v
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
