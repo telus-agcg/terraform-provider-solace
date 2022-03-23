@@ -36,7 +36,7 @@ func (r queueResource) NewData() *MsgVpnQueue {
 }
 
 func (r queueResource) Create(data *MsgVpnQueue, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.QueueApi.CreateMsgVpnQueue(r.Context, *data.MsgVpnName).Body(data.ToApi())
+	apiReq := r.Client.QueueApi.CreateMsgVpnQueue(r.Context, *data.MsgVpnName).Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }
@@ -65,7 +65,7 @@ func (r queueResource) Update(cur *MsgVpnQueue, pln *MsgVpnQueue, diag *diag.Dia
 
 	_, httpResponse, err := r.Client.QueueApi.
 		UpdateMsgVpnQueue(r.Context, *pln.MsgVpnName, *pln.QueueName).
-		Body(apiPlan).
+		Body(*apiPlan).
 		Execute()
 
 	// If the queue needed shut down before, set the enabled flags

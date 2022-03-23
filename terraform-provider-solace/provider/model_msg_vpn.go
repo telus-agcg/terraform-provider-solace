@@ -160,13 +160,28 @@ func (tfData *MsgVpn) ToTF(apiData *sempv2.MsgVpn) {
 	AssignIfDstNotNil(&tfData.DistributedCacheManagementEnabled, apiData.DistributedCacheManagementEnabled)
 	AssignIfDstNotNil(&tfData.DmrEnabled, apiData.DmrEnabled)
 	AssignIfDstNotNil(&tfData.Enabled, apiData.Enabled)
+	AssignIfDstNotNil(&tfData.EventConnectionCountThreshold, EventThresholdToTF(apiData.EventConnectionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventEgressFlowCountThreshold, EventThresholdToTF(apiData.EventEgressFlowCountThreshold))
+	AssignIfDstNotNil(&tfData.EventEgressMsgRateThreshold, EventThresholdByValueToTF(apiData.EventEgressMsgRateThreshold))
+	AssignIfDstNotNil(&tfData.EventEndpointCountThreshold, EventThresholdToTF(apiData.EventEndpointCountThreshold))
+	AssignIfDstNotNil(&tfData.EventIngressFlowCountThreshold, EventThresholdToTF(apiData.EventIngressFlowCountThreshold))
+	AssignIfDstNotNil(&tfData.EventIngressMsgRateThreshold, EventThresholdByValueToTF(apiData.EventIngressMsgRateThreshold))
 	AssignIfDstNotNil(&tfData.EventLargeMsgThreshold, apiData.EventLargeMsgThreshold)
 	AssignIfDstNotNil(&tfData.EventLogTag, apiData.EventLogTag)
+	AssignIfDstNotNil(&tfData.EventMsgSpoolUsageThreshold, EventThresholdToTF(apiData.EventMsgSpoolUsageThreshold))
 	AssignIfDstNotNil(&tfData.EventPublishClientEnabled, apiData.EventPublishClientEnabled)
 	AssignIfDstNotNil(&tfData.EventPublishMsgVpnEnabled, apiData.EventPublishMsgVpnEnabled)
 	AssignIfDstNotNil(&tfData.EventPublishSubscriptionMode, apiData.EventPublishSubscriptionMode)
 	AssignIfDstNotNil(&tfData.EventPublishTopicFormatMqttEnabled, apiData.EventPublishTopicFormatMqttEnabled)
 	AssignIfDstNotNil(&tfData.EventPublishTopicFormatSmfEnabled, apiData.EventPublishTopicFormatSmfEnabled)
+	AssignIfDstNotNil(&tfData.EventServiceAmqpConnectionCountThreshold, EventThresholdToTF(apiData.EventServiceAmqpConnectionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventServiceMqttConnectionCountThreshold, EventThresholdToTF(apiData.EventServiceMqttConnectionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventServiceRestIncomingConnectionCountThreshold, EventThresholdToTF(apiData.EventServiceRestIncomingConnectionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventServiceSmfConnectionCountThreshold, EventThresholdToTF(apiData.EventServiceSmfConnectionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventServiceWebConnectionCountThreshold, EventThresholdToTF(apiData.EventServiceWebConnectionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventSubscriptionCountThreshold, EventThresholdToTF(apiData.EventSubscriptionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventTransactedSessionCountThreshold, EventThresholdToTF(apiData.EventTransactedSessionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventTransactionCountThreshold, EventThresholdToTF(apiData.EventTransactionCountThreshold))
 	AssignIfDstNotNil(&tfData.ExportSubscriptionsEnabled, apiData.ExportSubscriptionsEnabled)
 	AssignIfDstNotNil(&tfData.JndiEnabled, apiData.JndiEnabled)
 	AssignIfDstNotNil(&tfData.MaxConnectionCount, apiData.MaxConnectionCount)
@@ -240,8 +255,8 @@ func (tfData *MsgVpn) ToTF(apiData *sempv2.MsgVpn) {
 	AssignIfDstNotNil(&tfData.TlsAllowDowngradeToPlainTextEnabled, apiData.TlsAllowDowngradeToPlainTextEnabled)
 }
 
-func (tfData *MsgVpn) ToApi() sempv2.MsgVpn {
-	return sempv2.MsgVpn{
+func (tfData *MsgVpn) ToApi() *sempv2.MsgVpn {
+	return &sempv2.MsgVpn{
 		Alias:                           tfData.Alias,
 		AuthenticationBasicEnabled:      tfData.AuthenticationBasicEnabled,
 		AuthenticationBasicProfileName:  tfData.AuthenticationBasicProfileName,
@@ -269,13 +284,28 @@ func (tfData *MsgVpn) ToApi() sempv2.MsgVpn {
 		DistributedCacheManagementEnabled:                       tfData.DistributedCacheManagementEnabled,
 		DmrEnabled:                                              tfData.DmrEnabled,
 		Enabled:                                                 tfData.Enabled,
+		EventConnectionCountThreshold:                           tfData.EventConnectionCountThreshold.ToApi(),
+		EventEgressFlowCountThreshold:                           tfData.EventEgressFlowCountThreshold.ToApi(),
+		EventEgressMsgRateThreshold:                             tfData.EventEgressMsgRateThreshold.ToApi(),
+		EventEndpointCountThreshold:                             tfData.EventEndpointCountThreshold.ToApi(),
+		EventIngressFlowCountThreshold:                          tfData.EventIngressFlowCountThreshold.ToApi(),
+		EventIngressMsgRateThreshold:                            tfData.EventIngressMsgRateThreshold.ToApi(),
 		EventLargeMsgThreshold:                                  tfData.EventLargeMsgThreshold,
 		EventLogTag:                                             tfData.EventLogTag,
+		EventMsgSpoolUsageThreshold:                             tfData.EventMsgSpoolUsageThreshold.ToApi(),
 		EventPublishClientEnabled:                               tfData.EventPublishClientEnabled,
 		EventPublishMsgVpnEnabled:                               tfData.EventPublishMsgVpnEnabled,
 		EventPublishSubscriptionMode:                            tfData.EventPublishSubscriptionMode,
 		EventPublishTopicFormatMqttEnabled:                      tfData.EventPublishTopicFormatMqttEnabled,
 		EventPublishTopicFormatSmfEnabled:                       tfData.EventPublishTopicFormatSmfEnabled,
+		EventServiceAmqpConnectionCountThreshold:                tfData.EventServiceAmqpConnectionCountThreshold.ToApi(),
+		EventServiceMqttConnectionCountThreshold:                tfData.EventServiceMqttConnectionCountThreshold.ToApi(),
+		EventServiceRestIncomingConnectionCountThreshold:        tfData.EventServiceRestIncomingConnectionCountThreshold.ToApi(),
+		EventServiceSmfConnectionCountThreshold:                 tfData.EventServiceSmfConnectionCountThreshold.ToApi(),
+		EventServiceWebConnectionCountThreshold:                 tfData.EventServiceWebConnectionCountThreshold.ToApi(),
+		EventSubscriptionCountThreshold:                         tfData.EventSubscriptionCountThreshold.ToApi(),
+		EventTransactedSessionCountThreshold:                    tfData.EventTransactedSessionCountThreshold.ToApi(),
+		EventTransactionCountThreshold:                          tfData.EventTransactionCountThreshold.ToApi(),
 		ExportSubscriptionsEnabled:                              tfData.ExportSubscriptionsEnabled,
 		JndiEnabled:                                             tfData.JndiEnabled,
 		MaxConnectionCount:                                      tfData.MaxConnectionCount,

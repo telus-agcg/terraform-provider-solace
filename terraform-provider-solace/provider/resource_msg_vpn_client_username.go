@@ -36,7 +36,7 @@ func (r clientUsernameResource) NewData() *MsgVpnClientUsername {
 }
 
 func (r clientUsernameResource) Create(data *MsgVpnClientUsername, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.ClientUsernameApi.CreateMsgVpnClientUsername(r.Context, *data.MsgVpnName).Body(data.ToApi())
+	apiReq := r.Client.ClientUsernameApi.CreateMsgVpnClientUsername(r.Context, *data.MsgVpnName).Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }
@@ -62,7 +62,7 @@ func (r clientUsernameResource) Update(cur *MsgVpnClientUsername, pln *MsgVpnCli
 
 	_, httpResponse, err := r.Client.ClientUsernameApi.
 		UpdateMsgVpnClientUsername(r.Context, *pln.MsgVpnName, *pln.ClientUsername).
-		Body(apiPlan).
+		Body(*apiPlan).
 		Execute()
 
 	// If the client-username needed shut down before *and* the desired state

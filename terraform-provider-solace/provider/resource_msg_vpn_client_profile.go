@@ -35,7 +35,7 @@ func (r clientProfileResource) NewData() *MsgVpnClientProfile {
 }
 
 func (r clientProfileResource) Create(data *MsgVpnClientProfile, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.ClientProfileApi.CreateMsgVpnClientProfile(r.Context, *data.MsgVpnName).Body(data.ToApi())
+	apiReq := r.Client.ClientProfileApi.CreateMsgVpnClientProfile(r.Context, *data.MsgVpnName).Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }
@@ -50,7 +50,7 @@ func (r clientProfileResource) Read(data *MsgVpnClientProfile, diag *diag.Diagno
 }
 
 func (r clientProfileResource) Update(_ *MsgVpnClientProfile, data *MsgVpnClientProfile, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.ClientProfileApi.UpdateMsgVpnClientProfile(r.Context, *data.MsgVpnName, *data.ClientProfileName).Body(data.ToApi())
+	apiReq := r.Client.ClientProfileApi.UpdateMsgVpnClientProfile(r.Context, *data.MsgVpnName, *data.ClientProfileName).Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }

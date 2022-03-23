@@ -30,8 +30,8 @@ func (tfData *MsgVpnClientUsername) ToTF(apiData *sempv2.MsgVpnClientUsername) {
 	AssignIfDstNotNil(&tfData.SubscriptionManagerEnabled, apiData.SubscriptionManagerEnabled)
 }
 
-func (tfData *MsgVpnClientUsername) ToApi() sempv2.MsgVpnClientUsername {
-	return sempv2.MsgVpnClientUsername{
+func (tfData *MsgVpnClientUsername) ToApi() *sempv2.MsgVpnClientUsername {
+	return &sempv2.MsgVpnClientUsername{
 		AclProfileName:    tfData.AclProfileName,
 		ClientProfileName: tfData.ClientProfileName,
 		ClientUsername:    tfData.ClientUsername,

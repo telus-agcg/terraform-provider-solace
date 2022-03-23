@@ -91,6 +91,16 @@ func (tfData *MsgVpnClientProfile) ToTF(apiData *sempv2.MsgVpnClientProfile) {
 	AssignIfDstNotNil(&tfData.ElidingDelay, apiData.ElidingDelay)
 	AssignIfDstNotNil(&tfData.ElidingEnabled, apiData.ElidingEnabled)
 	AssignIfDstNotNil(&tfData.ElidingMaxTopicCount, apiData.ElidingMaxTopicCount)
+	AssignIfDstNotNil(&tfData.EventClientProvisionedEndpointSpoolUsageThreshold, EventThresholdByPercentToTF(apiData.EventClientProvisionedEndpointSpoolUsageThreshold))
+	AssignIfDstNotNil(&tfData.EventConnectionCountPerClientUsernameThreshold, EventThresholdToTF(apiData.EventConnectionCountPerClientUsernameThreshold))
+	AssignIfDstNotNil(&tfData.EventEgressFlowCountThreshold, EventThresholdToTF(apiData.EventEgressFlowCountThreshold))
+	AssignIfDstNotNil(&tfData.EventEndpointCountPerClientUsernameThreshold, EventThresholdToTF(apiData.EventEndpointCountPerClientUsernameThreshold))
+	AssignIfDstNotNil(&tfData.EventIngressFlowCountThreshold, EventThresholdToTF(apiData.EventIngressFlowCountThreshold))
+	AssignIfDstNotNil(&tfData.EventServiceSmfConnectionCountPerClientUsernameThreshold, EventThresholdToTF(apiData.EventServiceSmfConnectionCountPerClientUsernameThreshold))
+	AssignIfDstNotNil(&tfData.EventServiceWebConnectionCountPerClientUsernameThreshold, EventThresholdToTF(apiData.EventServiceWebConnectionCountPerClientUsernameThreshold))
+	AssignIfDstNotNil(&tfData.EventSubscriptionCountThreshold, EventThresholdToTF(apiData.EventSubscriptionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventTransactedSessionCountThreshold, EventThresholdToTF(apiData.EventTransactedSessionCountThreshold))
+	AssignIfDstNotNil(&tfData.EventTransactionCountThreshold, EventThresholdToTF(apiData.EventTransactionCountThreshold))
 	AssignIfDstNotNil(&tfData.MaxConnectionCountPerClientUsername, apiData.MaxConnectionCountPerClientUsername)
 	AssignIfDstNotNil(&tfData.MaxEgressFlowCount, apiData.MaxEgressFlowCount)
 	AssignIfDstNotNil(&tfData.MaxEndpointCountPerClientUsername, apiData.MaxEndpointCountPerClientUsername)
@@ -127,59 +137,69 @@ func (tfData *MsgVpnClientProfile) ToTF(apiData *sempv2.MsgVpnClientProfile) {
 	AssignIfDstNotNil(&tfData.TlsAllowDowngradeToPlainTextEnabled, apiData.TlsAllowDowngradeToPlainTextEnabled)
 }
 
-func (tfData *MsgVpnClientProfile) ToApi() sempv2.MsgVpnClientProfile {
-	return sempv2.MsgVpnClientProfile{
-		AllowBridgeConnectionsEnabled:                          tfData.AllowBridgeConnectionsEnabled,
-		AllowCutThroughForwardingEnabled:                       tfData.AllowCutThroughForwardingEnabled,
-		AllowGuaranteedEndpointCreateDurability:                tfData.AllowGuaranteedEndpointCreateDurability,
-		AllowGuaranteedEndpointCreateEnabled:                   tfData.AllowGuaranteedEndpointCreateEnabled,
-		AllowGuaranteedMsgReceiveEnabled:                       tfData.AllowGuaranteedMsgReceiveEnabled,
-		AllowGuaranteedMsgSendEnabled:                          tfData.AllowGuaranteedMsgSendEnabled,
-		AllowSharedSubscriptionsEnabled:                        tfData.AllowSharedSubscriptionsEnabled,
-		AllowTransactedSessionsEnabled:                         tfData.AllowTransactedSessionsEnabled,
-		ApiQueueManagementCopyFromOnCreateName:                 tfData.ApiQueueManagementCopyFromOnCreateName,
-		ApiQueueManagementCopyFromOnCreateTemplateName:         tfData.ApiQueueManagementCopyFromOnCreateTemplateName,
-		ApiTopicEndpointManagementCopyFromOnCreateName:         tfData.ApiTopicEndpointManagementCopyFromOnCreateName,
-		ApiTopicEndpointManagementCopyFromOnCreateTemplateName: tfData.ApiTopicEndpointManagementCopyFromOnCreateTemplateName,
-		ClientProfileName:                                      tfData.ClientProfileName,
-		CompressionEnabled:                                     tfData.CompressionEnabled,
-		ElidingDelay:                                           tfData.ElidingDelay,
-		ElidingEnabled:                                         tfData.ElidingEnabled,
-		ElidingMaxTopicCount:                                   tfData.ElidingMaxTopicCount,
-		MaxConnectionCountPerClientUsername:                    tfData.MaxConnectionCountPerClientUsername,
-		MaxEgressFlowCount:                                     tfData.MaxEgressFlowCount,
-		MaxEndpointCountPerClientUsername:                      tfData.MaxEndpointCountPerClientUsername,
-		MaxIngressFlowCount:                                    tfData.MaxIngressFlowCount,
-		MaxMsgsPerTransaction:                                  tfData.MaxMsgsPerTransaction,
-		MaxSubscriptionCount:                                   tfData.MaxSubscriptionCount,
-		MaxTransactedSessionCount:                              tfData.MaxTransactedSessionCount,
-		MaxTransactionCount:                                    tfData.MaxTransactionCount,
-		MsgVpnName:                                             tfData.MsgVpnName,
-		QueueControl1MaxDepth:                                  tfData.QueueControl1MaxDepth,
-		QueueControl1MinMsgBurst:                               tfData.QueueControl1MinMsgBurst,
-		QueueDirect1MaxDepth:                                   tfData.QueueDirect1MaxDepth,
-		QueueDirect1MinMsgBurst:                                tfData.QueueDirect1MinMsgBurst,
-		QueueDirect2MaxDepth:                                   tfData.QueueDirect2MaxDepth,
-		QueueDirect2MinMsgBurst:                                tfData.QueueDirect2MinMsgBurst,
-		QueueDirect3MaxDepth:                                   tfData.QueueDirect3MaxDepth,
-		QueueDirect3MinMsgBurst:                                tfData.QueueDirect3MinMsgBurst,
-		QueueGuaranteed1MaxDepth:                               tfData.QueueGuaranteed1MaxDepth,
-		QueueGuaranteed1MinMsgBurst:                            tfData.QueueGuaranteed1MinMsgBurst,
-		RejectMsgToSenderOnNoSubscriptionMatchEnabled:          tfData.RejectMsgToSenderOnNoSubscriptionMatchEnabled,
-		ReplicationAllowClientConnectWhenStandbyEnabled:        tfData.ReplicationAllowClientConnectWhenStandbyEnabled,
-		ServiceMinKeepaliveTimeout:                             tfData.ServiceMinKeepaliveTimeout,
-		ServiceSmfMaxConnectionCountPerClientUsername:          tfData.ServiceSmfMaxConnectionCountPerClientUsername,
-		ServiceSmfMinKeepaliveEnabled:                          tfData.ServiceSmfMinKeepaliveEnabled,
-		ServiceWebInactiveTimeout:                              tfData.ServiceWebInactiveTimeout,
-		ServiceWebMaxConnectionCountPerClientUsername:          tfData.ServiceWebMaxConnectionCountPerClientUsername,
-		ServiceWebMaxPayload:                                   tfData.ServiceWebMaxPayload,
-		TcpCongestionWindowSize:                                tfData.TcpCongestionWindowSize,
-		TcpKeepaliveCount:                                      tfData.TcpKeepaliveCount,
-		TcpKeepaliveIdleTime:                                   tfData.TcpKeepaliveIdleTime,
-		TcpKeepaliveInterval:                                   tfData.TcpKeepaliveInterval,
-		TcpMaxSegmentSize:                                      tfData.TcpMaxSegmentSize,
-		TcpMaxWindowSize:                                       tfData.TcpMaxWindowSize,
-		TlsAllowDowngradeToPlainTextEnabled:                    tfData.TlsAllowDowngradeToPlainTextEnabled,
+func (tfData *MsgVpnClientProfile) ToApi() *sempv2.MsgVpnClientProfile {
+	return &sempv2.MsgVpnClientProfile{
+		AllowBridgeConnectionsEnabled:                            tfData.AllowBridgeConnectionsEnabled,
+		AllowCutThroughForwardingEnabled:                         tfData.AllowCutThroughForwardingEnabled,
+		AllowGuaranteedEndpointCreateDurability:                  tfData.AllowGuaranteedEndpointCreateDurability,
+		AllowGuaranteedEndpointCreateEnabled:                     tfData.AllowGuaranteedEndpointCreateEnabled,
+		AllowGuaranteedMsgReceiveEnabled:                         tfData.AllowGuaranteedMsgReceiveEnabled,
+		AllowGuaranteedMsgSendEnabled:                            tfData.AllowGuaranteedMsgSendEnabled,
+		AllowSharedSubscriptionsEnabled:                          tfData.AllowSharedSubscriptionsEnabled,
+		AllowTransactedSessionsEnabled:                           tfData.AllowTransactedSessionsEnabled,
+		ApiQueueManagementCopyFromOnCreateName:                   tfData.ApiQueueManagementCopyFromOnCreateName,
+		ApiQueueManagementCopyFromOnCreateTemplateName:           tfData.ApiQueueManagementCopyFromOnCreateTemplateName,
+		ApiTopicEndpointManagementCopyFromOnCreateName:           tfData.ApiTopicEndpointManagementCopyFromOnCreateName,
+		ApiTopicEndpointManagementCopyFromOnCreateTemplateName:   tfData.ApiTopicEndpointManagementCopyFromOnCreateTemplateName,
+		ClientProfileName:                                        tfData.ClientProfileName,
+		CompressionEnabled:                                       tfData.CompressionEnabled,
+		ElidingDelay:                                             tfData.ElidingDelay,
+		ElidingEnabled:                                           tfData.ElidingEnabled,
+		ElidingMaxTopicCount:                                     tfData.ElidingMaxTopicCount,
+		EventClientProvisionedEndpointSpoolUsageThreshold:        tfData.EventClientProvisionedEndpointSpoolUsageThreshold.ToApi(),
+		EventConnectionCountPerClientUsernameThreshold:           tfData.EventConnectionCountPerClientUsernameThreshold.ToApi(),
+		EventEgressFlowCountThreshold:                            tfData.EventEgressFlowCountThreshold.ToApi(),
+		EventEndpointCountPerClientUsernameThreshold:             tfData.EventEndpointCountPerClientUsernameThreshold.ToApi(),
+		EventIngressFlowCountThreshold:                           tfData.EventIngressFlowCountThreshold.ToApi(),
+		EventServiceSmfConnectionCountPerClientUsernameThreshold: tfData.EventServiceSmfConnectionCountPerClientUsernameThreshold.ToApi(),
+		EventServiceWebConnectionCountPerClientUsernameThreshold: tfData.EventServiceWebConnectionCountPerClientUsernameThreshold.ToApi(),
+		EventSubscriptionCountThreshold:                          tfData.EventSubscriptionCountThreshold.ToApi(),
+		EventTransactedSessionCountThreshold:                     tfData.EventTransactedSessionCountThreshold.ToApi(),
+		EventTransactionCountThreshold:                           tfData.EventTransactionCountThreshold.ToApi(),
+		MaxConnectionCountPerClientUsername:                      tfData.MaxConnectionCountPerClientUsername,
+		MaxEgressFlowCount:                                       tfData.MaxEgressFlowCount,
+		MaxEndpointCountPerClientUsername:                        tfData.MaxEndpointCountPerClientUsername,
+		MaxIngressFlowCount:                                      tfData.MaxIngressFlowCount,
+		MaxMsgsPerTransaction:                                    tfData.MaxMsgsPerTransaction,
+		MaxSubscriptionCount:                                     tfData.MaxSubscriptionCount,
+		MaxTransactedSessionCount:                                tfData.MaxTransactedSessionCount,
+		MaxTransactionCount:                                      tfData.MaxTransactionCount,
+		MsgVpnName:                                               tfData.MsgVpnName,
+		QueueControl1MaxDepth:                                    tfData.QueueControl1MaxDepth,
+		QueueControl1MinMsgBurst:                                 tfData.QueueControl1MinMsgBurst,
+		QueueDirect1MaxDepth:                                     tfData.QueueDirect1MaxDepth,
+		QueueDirect1MinMsgBurst:                                  tfData.QueueDirect1MinMsgBurst,
+		QueueDirect2MaxDepth:                                     tfData.QueueDirect2MaxDepth,
+		QueueDirect2MinMsgBurst:                                  tfData.QueueDirect2MinMsgBurst,
+		QueueDirect3MaxDepth:                                     tfData.QueueDirect3MaxDepth,
+		QueueDirect3MinMsgBurst:                                  tfData.QueueDirect3MinMsgBurst,
+		QueueGuaranteed1MaxDepth:                                 tfData.QueueGuaranteed1MaxDepth,
+		QueueGuaranteed1MinMsgBurst:                              tfData.QueueGuaranteed1MinMsgBurst,
+		RejectMsgToSenderOnNoSubscriptionMatchEnabled:            tfData.RejectMsgToSenderOnNoSubscriptionMatchEnabled,
+		ReplicationAllowClientConnectWhenStandbyEnabled:          tfData.ReplicationAllowClientConnectWhenStandbyEnabled,
+		ServiceMinKeepaliveTimeout:                               tfData.ServiceMinKeepaliveTimeout,
+		ServiceSmfMaxConnectionCountPerClientUsername:            tfData.ServiceSmfMaxConnectionCountPerClientUsername,
+		ServiceSmfMinKeepaliveEnabled:                            tfData.ServiceSmfMinKeepaliveEnabled,
+		ServiceWebInactiveTimeout:                                tfData.ServiceWebInactiveTimeout,
+		ServiceWebMaxConnectionCountPerClientUsername:            tfData.ServiceWebMaxConnectionCountPerClientUsername,
+		ServiceWebMaxPayload:                                     tfData.ServiceWebMaxPayload,
+		TcpCongestionWindowSize:                                  tfData.TcpCongestionWindowSize,
+		TcpKeepaliveCount:                                        tfData.TcpKeepaliveCount,
+		TcpKeepaliveIdleTime:                                     tfData.TcpKeepaliveIdleTime,
+		TcpKeepaliveInterval:                                     tfData.TcpKeepaliveInterval,
+		TcpMaxSegmentSize:                                        tfData.TcpMaxSegmentSize,
+		TcpMaxWindowSize:                                         tfData.TcpMaxWindowSize,
+		TlsAllowDowngradeToPlainTextEnabled:                      tfData.TlsAllowDowngradeToPlainTextEnabled,
 	}
 }
 

@@ -78,12 +78,12 @@ func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceT
 	return map[string]tfsdk.ResourceType{
 		"solace_msgvpn":     msgVpnResourceType{},
 		"solace_aclprofile": aclProfileResourceType{},
-		//"solace_aclprofile_clientconnectexception": aclProfileClient,
-		//"solace_aclprofile_publishexception":    aclProfilePublishExceptionResourceType{},
-		//"solace_aclprofile_subscribeexception":  aclProfileSubscribeExceptionResourceType{},
-		"solace_clientprofile":  clientProfileResourceType{},
-		"solace_clientusername": clientUsernameResourceType{},
-		"solace_queue":          queueResourceType{},
+		"solace_aclprofile_client_connect_exception": aclProfileClientConnectExceptionResourceType{},
+		"solace_aclprofile_publish_exception":        aclProfilePublishExceptionResourceType{},
+		"solace_aclprofile_subscribe_exception":      aclProfileSubscribeExceptionResourceType{},
+		"solace_clientprofile":                       clientProfileResourceType{},
+		"solace_clientusername":                      clientUsernameResourceType{},
+		"solace_queue":                               queueResourceType{},
 	}, nil
 }
 

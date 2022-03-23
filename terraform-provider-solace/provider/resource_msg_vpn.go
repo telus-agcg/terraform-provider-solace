@@ -35,7 +35,7 @@ func (r msgVpnResource) NewData() *MsgVpn {
 }
 
 func (r msgVpnResource) Create(data *MsgVpn, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.MsgVpnApi.CreateMsgVpn(r.Context).Body(data.ToApi())
+	apiReq := r.Client.MsgVpnApi.CreateMsgVpn(r.Context).Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }
@@ -50,7 +50,7 @@ func (r msgVpnResource) Read(data *MsgVpn, diag *diag.Diagnostics) (*http.Respon
 }
 
 func (r msgVpnResource) Update(_ *MsgVpn, data *MsgVpn, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.MsgVpnApi.UpdateMsgVpn(r.Context, *data.MsgVpnName).Body(data.ToApi())
+	apiReq := r.Client.MsgVpnApi.UpdateMsgVpn(r.Context, *data.MsgVpnName).Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }

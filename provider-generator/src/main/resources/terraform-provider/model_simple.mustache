@@ -20,14 +20,14 @@ type {{classname}} struct {
 
 func (tfData *{{classname}}) ToTF(apiData *sempv2.{{classname}}) {
 	{{#vars}}
-	AssignIfDstNotNil(&tfData.{{name}}, apiData.{{name}})
+	AssignIfDstNotNil(&tfData.{{name}}, {{^isString}}{{^isNumeric}}{{^isBoolean}}{{dataType}}ToTF({{/isBoolean}}{{/isNumeric}}{{/isString}}apiData.{{name}}{{^isString}}{{^isNumeric}}{{^isBoolean}}){{/isBoolean}}{{/isNumeric}}{{/isString}})
 	{{/vars}}
 }
 
-func (tfData *{{classname}}) ToApi() sempv2.{{classname}} {
-	return sempv2.{{classname}} {
+func (tfData *{{classname}}) ToApi() *sempv2.{{classname}} {
+	return &sempv2.{{classname}}{
 		{{#vars}}
-		{{name}}: tfData.{{name}},
+		{{name}}: tfData.{{name}}{{^isString}}{{^isNumeric}}{{^isBoolean}}.ToApi(){{/isBoolean}}{{/isNumeric}}{{/isString}},
 		{{/vars}}
 	}
 }

@@ -45,6 +45,9 @@ func (tfData *MsgVpnQueue) ToTF(apiData *sempv2.MsgVpnQueue) {
 	AssignIfDstNotNil(&tfData.DeliveryCountEnabled, apiData.DeliveryCountEnabled)
 	AssignIfDstNotNil(&tfData.DeliveryDelay, apiData.DeliveryDelay)
 	AssignIfDstNotNil(&tfData.EgressEnabled, apiData.EgressEnabled)
+	AssignIfDstNotNil(&tfData.EventBindCountThreshold, EventThresholdToTF(apiData.EventBindCountThreshold))
+	AssignIfDstNotNil(&tfData.EventMsgSpoolUsageThreshold, EventThresholdToTF(apiData.EventMsgSpoolUsageThreshold))
+	AssignIfDstNotNil(&tfData.EventRejectLowPriorityMsgLimitThreshold, EventThresholdToTF(apiData.EventRejectLowPriorityMsgLimitThreshold))
 	AssignIfDstNotNil(&tfData.IngressEnabled, apiData.IngressEnabled)
 	AssignIfDstNotNil(&tfData.MaxBindCount, apiData.MaxBindCount)
 	AssignIfDstNotNil(&tfData.MaxDeliveredUnackedMsgsPerFlow, apiData.MaxDeliveredUnackedMsgsPerFlow)
@@ -64,31 +67,34 @@ func (tfData *MsgVpnQueue) ToTF(apiData *sempv2.MsgVpnQueue) {
 	AssignIfDstNotNil(&tfData.RespectTtlEnabled, apiData.RespectTtlEnabled)
 }
 
-func (tfData *MsgVpnQueue) ToApi() sempv2.MsgVpnQueue {
-	return sempv2.MsgVpnQueue{
-		AccessType:                         tfData.AccessType,
-		ConsumerAckPropagationEnabled:      tfData.ConsumerAckPropagationEnabled,
-		DeadMsgQueue:                       tfData.DeadMsgQueue,
-		DeliveryCountEnabled:               tfData.DeliveryCountEnabled,
-		DeliveryDelay:                      tfData.DeliveryDelay,
-		EgressEnabled:                      tfData.EgressEnabled,
-		IngressEnabled:                     tfData.IngressEnabled,
-		MaxBindCount:                       tfData.MaxBindCount,
-		MaxDeliveredUnackedMsgsPerFlow:     tfData.MaxDeliveredUnackedMsgsPerFlow,
-		MaxMsgSize:                         tfData.MaxMsgSize,
-		MaxMsgSpoolUsage:                   tfData.MaxMsgSpoolUsage,
-		MaxRedeliveryCount:                 tfData.MaxRedeliveryCount,
-		MaxTtl:                             tfData.MaxTtl,
-		MsgVpnName:                         tfData.MsgVpnName,
-		Owner:                              tfData.Owner,
-		Permission:                         tfData.Permission,
-		QueueName:                          tfData.QueueName,
-		RedeliveryEnabled:                  tfData.RedeliveryEnabled,
-		RejectLowPriorityMsgEnabled:        tfData.RejectLowPriorityMsgEnabled,
-		RejectLowPriorityMsgLimit:          tfData.RejectLowPriorityMsgLimit,
-		RejectMsgToSenderOnDiscardBehavior: tfData.RejectMsgToSenderOnDiscardBehavior,
-		RespectMsgPriorityEnabled:          tfData.RespectMsgPriorityEnabled,
-		RespectTtlEnabled:                  tfData.RespectTtlEnabled,
+func (tfData *MsgVpnQueue) ToApi() *sempv2.MsgVpnQueue {
+	return &sempv2.MsgVpnQueue{
+		AccessType:                              tfData.AccessType,
+		ConsumerAckPropagationEnabled:           tfData.ConsumerAckPropagationEnabled,
+		DeadMsgQueue:                            tfData.DeadMsgQueue,
+		DeliveryCountEnabled:                    tfData.DeliveryCountEnabled,
+		DeliveryDelay:                           tfData.DeliveryDelay,
+		EgressEnabled:                           tfData.EgressEnabled,
+		EventBindCountThreshold:                 tfData.EventBindCountThreshold.ToApi(),
+		EventMsgSpoolUsageThreshold:             tfData.EventMsgSpoolUsageThreshold.ToApi(),
+		EventRejectLowPriorityMsgLimitThreshold: tfData.EventRejectLowPriorityMsgLimitThreshold.ToApi(),
+		IngressEnabled:                          tfData.IngressEnabled,
+		MaxBindCount:                            tfData.MaxBindCount,
+		MaxDeliveredUnackedMsgsPerFlow:          tfData.MaxDeliveredUnackedMsgsPerFlow,
+		MaxMsgSize:                              tfData.MaxMsgSize,
+		MaxMsgSpoolUsage:                        tfData.MaxMsgSpoolUsage,
+		MaxRedeliveryCount:                      tfData.MaxRedeliveryCount,
+		MaxTtl:                                  tfData.MaxTtl,
+		MsgVpnName:                              tfData.MsgVpnName,
+		Owner:                                   tfData.Owner,
+		Permission:                              tfData.Permission,
+		QueueName:                               tfData.QueueName,
+		RedeliveryEnabled:                       tfData.RedeliveryEnabled,
+		RejectLowPriorityMsgEnabled:             tfData.RejectLowPriorityMsgEnabled,
+		RejectLowPriorityMsgLimit:               tfData.RejectLowPriorityMsgLimit,
+		RejectMsgToSenderOnDiscardBehavior:      tfData.RejectMsgToSenderOnDiscardBehavior,
+		RespectMsgPriorityEnabled:               tfData.RespectMsgPriorityEnabled,
+		RespectTtlEnabled:                       tfData.RespectTtlEnabled,
 	}
 }
 
