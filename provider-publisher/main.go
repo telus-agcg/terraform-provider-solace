@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,16 +19,28 @@ import (
 	rt "github.com/go-openapi/runtime/client"
 )
 
-const org string = "telusagriculture"
-const tok string = "VL6OpSEGpgaSUg.atlasv1.FPF3fIrNcFMVAOk3EFnBQBsDxy0nXHMRJmAX9OJiVbjYUX9ZemhBDaFy7YDd2LCcy4U"
-const nam string = "solace"
-const ver string = "0.2.0"
-const key string = "14F5FEA3B2DA691F"
+var org = flag.String("organization", "", "The Terraform Cloud organization name")
+var nam = flag.String("name", "", "Provider name (without 'terraform-provider-')")
+var ver = flag.String("version", "", "Provider version (without 'v')")
+var key = flag.String("gpg-key", "", "GPG Key ID the release was signed with.")
+var tok = ""
 
 var ctx context.Context
 var client *tfclient.APIClient
 
 func main() {
+	flag.Parse()
+	CheckRequiredArg("organization", org, flag.Usage)
+	CheckRequiredArg("name", nam, flag.Usage)
+	CheckRequiredArg("version", ver, flag.Usage)
+	CheckRequiredArg("gpg-key", key, flag.Usage)
+
+	tok = os.Getenv("TF_API_TOKEN")
+	if len(strings.TrimSpace(tok)) == 0 {
+		fmt.Fprintf(flag.CommandLine.Output(), "No token provided. Please, set environment variable TF_API_TOKEN with a personal or team token.")
+		os.Exit(1)
+	}
+
 	ctx = context.WithValue(context.Background(), tfclient.ContextAccessToken, tok)
 
 	config := tfclient.NewConfiguration()
@@ -45,14 +58,18 @@ func main() {
 	client = tfclient.NewAPIClient(config)
 
 	CreateProvider("solace")
-	uploadLinks := CreateProviderVersion(nam, ver, key)
+	CreateProviderVersion(*nam, *ver, *key)
+	CreatePlatforms(NameAndVersionFilePrefix(*nam, *ver)+"_SHA256SUMS", *nam, *ver)
+}
 
-	nameAndVersion := fmt.Sprintf("terraform-provider-%s_%s", nam, ver)
+func CheckRequiredArg(name string, val *string, usage func()) {
+	if val == nil || len(strings.TrimSpace(*val)) == 0 {
+		usage()
 
-	UploadFile(nameAndVersion+"_SHA256SUMS", "SHA256SUMS", "text/plain", *uploadLinks.ShasumsUpload)
-	UploadFile(nameAndVersion+"_SHA256SUMS.sig", "SHA256SUMS.sig", "application/octet-stream", *uploadLinks.ShasumsSigUpload)
-
-	CreatePlatforms(nameAndVersion+"_SHA256SUMS", nam, ver)
+		fmt.Fprintf(flag.CommandLine.Output(),
+			"\n\nRequired argument %q not present\n", name)
+		os.Exit(1)
+	}
 }
 
 func CreatePlatforms(sumsfile string, name string, version string) {
@@ -77,24 +94,43 @@ func CreatePlatforms(sumsfile string, name string, version string) {
 
 func CreatePlatform(name string, version string, os string, arch string, sum string) {
 	filename := fmt.Sprintf("terraform-provider-%s_%s_%s_%s.zip", name, version, os, arch)
-	createPlatform := tfclient.CreateProviderPlatform{
-		Data: &tfclient.CreateProviderPlatformData{
-			Attributes: tfclient.CreateProviderPlatformDataAttributes{
-				Os:       os,
-				Arch:     arch,
-				Shasum:   sum,
-				Filename: filename,
-			},
-		},
-	}
-	req := client.DefaultApi.CreateProviderPlatform(ctx, org, name, version).CreateProviderPlatform(createPlatform)
-	createPlatformRes, _, err := req.Execute()
+
+	getPlatformResp, _, err := client.DefaultApi.
+		GetProviderPlatform(ctx, *org, name, version, os, arch).
+		Execute()
+
+	var providerBinaryUpload *string
+
 	if err != nil {
-		log.Fatalf("Error creating platform %s/%s: %s", os, arch, err.Error())
+		createPlatform := tfclient.CreateProviderPlatform{
+			Data: &tfclient.CreateProviderPlatformData{
+				Attributes: tfclient.CreateProviderPlatformDataAttributes{
+					Os:       os,
+					Arch:     arch,
+					Shasum:   sum,
+					Filename: filename,
+				},
+			},
+		}
+		req := client.DefaultApi.CreateProviderPlatform(ctx, *org, name, version).CreateProviderPlatform(createPlatform)
+		createPlatformRes, _, err := req.Execute()
+		if err != nil {
+			log.Printf("Error creating platform %s/%s: %s", os, arch, err.Error())
+			return
+		}
+		providerBinaryUpload = createPlatformRes.Data.Links.ProviderBinaryUpload
+	} else if !*getPlatformResp.Data.Attributes.ProviderBinaryUploaded {
+		providerBinaryUpload = getPlatformResp.Data.Links.ProviderBinaryUpload
+	} else {
+		log.Printf("Provider platform %s/%s already exists\n", os, arch)
 	}
 
-	// Now upload the binary
-	UploadFile(filename, filename, "application/octet-stream", *createPlatformRes.Data.Links.ProviderBinaryUpload)
+	// Now upload the binary if needed
+	if providerBinaryUpload != nil {
+		UploadFile(filename, filename, "application/octet-stream", *providerBinaryUpload)
+	} else {
+		log.Printf("Provider binary for %s/%s already uploaded\n", os, arch)
+	}
 }
 
 func UploadFile(filename string, remoteName string, contentType string, url string) {
@@ -144,9 +180,9 @@ func UploadFile(filename string, remoteName string, contentType string, url stri
 	return
 }
 
-func CreateProviderVersion(name string, version string, keyid string) *tfclient.CreateRegistryProviderVersionResponseDataLinks {
+func CreateProviderVersion(name string, version string, keyid string) {
 	getProviderVersionsRes, _, err := client.DefaultApi.GetProviderVersions(
-		ctx, org, name).Execute()
+		ctx, *org, name).Execute()
 	if err != nil {
 		log.Fatalf("Unable to get provider versions: %s\n", err.Error())
 	}
@@ -159,7 +195,8 @@ func CreateProviderVersion(name string, version string, keyid string) *tfclient.
 		}
 	}
 	if found {
-		log.Fatalf("Provider %s version %s already exists.\n", name, version)
+		log.Printf("Provider %s version %s already exists.\n", name, version)
+		return
 	}
 
 	log.Printf("Creating provider %s version %s\n", name, version)
@@ -174,17 +211,27 @@ func CreateProviderVersion(name string, version string, keyid string) *tfclient.
 		},
 	}
 	createProviderVersionRes, _, err := client.DefaultApi.CreateProviderVersion(
-		ctx, org, name).CreateRegistryProviderVersion(providerVersion).Execute()
+		ctx, *org, name).CreateRegistryProviderVersion(providerVersion).Execute()
 	if err != nil {
 		log.Fatalf("Error creating %s, version %s: %s\n", name, version, err.Error())
 	}
 
-	return createProviderVersionRes.Data.Links
+	if !*createProviderVersionRes.Data.Attributes.ShasumsUploaded {
+		UploadFile(NameAndVersionFilePrefix(name, version)+"_SHA256SUMS", "SHA256SUMS", "text/plain",
+			*createProviderVersionRes.Data.Links.ShasumsUpload)
+	}
+
+	if !*createProviderVersionRes.Data.Attributes.ShasumsSigUploaded {
+		UploadFile(NameAndVersionFilePrefix(name, version)+"_SHA256SUMS.sig", "SHA256SUMS.sig", "application/octet-stream",
+			*createProviderVersionRes.Data.Links.ShasumsSigUpload)
+	}
+
+	return
 }
 
 func CreateProvider(name string) {
 	getProvidersRes, _, err := client.DefaultApi.GetProviders(
-		ctx, org).Execute()
+		ctx, *org).Execute()
 	if err != nil {
 		log.Fatalf("Unable to get providers: %s\n", err.Error())
 	}
@@ -198,16 +245,20 @@ func CreateProvider(name string) {
 				Type: "registry-providers",
 				Attributes: tfclient.RegistryProviderDataAttributes{
 					Name:         name,
-					Namespace:    org,
+					Namespace:    *org,
 					RegistryName: "private",
 				},
 			},
 		}
 		_, _, err := client.DefaultApi.
-			CreateProvider(ctx, org).RegistryProvider(provider).
+			CreateProvider(ctx, *org).RegistryProvider(provider).
 			Execute()
 		if err != nil {
 			log.Printf("Error creating provider: %s\n", err.Error())
 		}
 	}
+}
+
+func NameAndVersionFilePrefix(name string, version string) string {
+	return fmt.Sprintf("terraform-provider-%s_%s", name, version)
 }

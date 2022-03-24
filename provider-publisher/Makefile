@@ -13,6 +13,10 @@ provider-publisher: *.go
 	go build
 
 run:
-	cd ../terraform-provider-solace/dist &&	../../provider-publisher/provider-publisher
+	cd ../terraform-provider-solace/dist &&	../../provider-publisher/provider-publisher \
+		-organization telusagriculture	\
+		-name solace					\
+		-version 0.3.0					\
+		-gpg-key 14F5FEA3B2DA691F		
 
 all: generate provider-publisher run
