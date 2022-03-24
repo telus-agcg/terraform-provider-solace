@@ -17,6 +17,11 @@ description: |-
 
 ### Required
 
-- `host` (String) Hostname for the Solace Event Broker
+- `hostname` (String) Hostname for the Solace Event Broker
 - `password` (String, Sensitive) Password
-- `user` (String) Solace user with admin access
+- `username` (String) Solace user with admin access
+
+### Optional
+
+- `insecure` (Boolean) Ignore HTTPS certificate errors
+- `scheme` (String) URL scheme to use: http or https

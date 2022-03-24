@@ -1,7 +1,5 @@
 PKG_NAME=provider
 
-.PHONY:
-
 openapi-provider-generator:
 	mvn -f provider-generator/pom.xml package
 
@@ -15,11 +13,3 @@ generate-provider: openapi-provider-generator
 		--output terraform-provider-solace/$(PKG_NAME) \
 		--package-name $(PKG_NAME)
 	gofmt -w terraform-provider-solace/$(PKG_NAME)
-
-install:
-	cd terraform-provider-solace; go install
-
-release:
-	GITHUB_TOKEN=$(GITHUB_TOKEN) \
-	GPG_FINGERPRINT=$(GPG_FINGERPRINT) \
-		goreleaser release --snapshot --rm-dist
