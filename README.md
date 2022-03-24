@@ -53,6 +53,8 @@ provider_installation {
 }
 ```
 
+Always run `gofmt -w -s .` before committing to make sure the diffs don't contain minor formatting differences.
+
 ## Compiling
 
 ### Generate schemas and models
