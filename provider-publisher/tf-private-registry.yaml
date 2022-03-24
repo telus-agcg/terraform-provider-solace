@@ -58,16 +58,6 @@ paths:
     parameters:
         - $ref: '#/components/parameters/organization'
         - $ref: '#/components/parameters/name'
-    get:
-      operationId: GetProviderVersions
-      responses:
-        '200':
-          description: OK
-          content:
-            application/vnd.api+json:
-              schema:
-                $ref: '#/components/schemas/registry-provider-versions-response'
-
     post:
       operationId: CreateProviderVersion
       requestBody:
@@ -83,6 +73,20 @@ paths:
             application/vnd.api+json:
               schema:
                 $ref: '#/components/schemas/create-registry-provider-version-response'
+  /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}:
+    parameters:
+        - $ref: '#/components/parameters/organization'
+        - $ref: '#/components/parameters/name'
+        - $ref: '#/components/parameters/version'
+    get:
+      operationId: GetProviderVersion
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.api+json:
+              schema:
+                $ref: '#/components/schemas/registry-provider-version-response'
   /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms:
     parameters:
         - $ref: '#/components/parameters/organization'
@@ -295,6 +299,46 @@ components:
                     type: boolean
                   shasums-sig-uploaded:
                     type: boolean
+    registry-provider-version-response:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+              enum:
+                - registry-provider-versions
+            attributes:
+              type: object
+              properties:
+                version:
+                  type: string
+                created-at:
+                  type: string
+                  format: timestamp
+                updated-at:
+                  type: string
+                  format: timestamp
+                key-id:
+                  type: string
+                protocols:
+                  $ref: '#/components/schemas/protocols'
+                permissions:
+                  $ref: '#/components/schemas/permissions'
+                shasums-uploaded:
+                  type: boolean
+                shasums-sig-uploaded:
+                  type: boolean
+            links:
+              type: object
+              properties:
+                shasums-upload:
+                  type: string
+                shasums-sig-upload:
+                  type: string
     create-registry-provider-version:
       type: object
       properties:

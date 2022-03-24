@@ -83,7 +83,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**CreateProviderPlatform**](docs/DefaultApi.md#createproviderplatform) | **Post** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms | 
 *DefaultApi* | [**CreateProviderVersion**](docs/DefaultApi.md#createproviderversion) | **Post** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions | 
 *DefaultApi* | [**GetProviderPlatform**](docs/DefaultApi.md#getproviderplatform) | **Get** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}/platforms/{os}/{arch} | 
-*DefaultApi* | [**GetProviderVersions**](docs/DefaultApi.md#getproviderversions) | **Get** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions | 
+*DefaultApi* | [**GetProviderVersion**](docs/DefaultApi.md#getproviderversion) | **Get** /v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version} | 
 *DefaultApi* | [**GetProviders**](docs/DefaultApi.md#getproviders) | **Get** /v2/organizations/{organization}/registry-providers | 
 
 
@@ -100,8 +100,6 @@ Class | Method | HTTP request | Description
  - [CreateRegistryProviderVersionData](docs/CreateRegistryProviderVersionData.md)
  - [CreateRegistryProviderVersionDataAttributes](docs/CreateRegistryProviderVersionDataAttributes.md)
  - [CreateRegistryProviderVersionResponse](docs/CreateRegistryProviderVersionResponse.md)
- - [CreateRegistryProviderVersionResponseData](docs/CreateRegistryProviderVersionResponseData.md)
- - [CreateRegistryProviderVersionResponseDataLinks](docs/CreateRegistryProviderVersionResponseDataLinks.md)
  - [GpgKey](docs/GpgKey.md)
  - [GpgKeyData](docs/GpgKeyData.md)
  - [GpgKeyDataAttributes](docs/GpgKeyDataAttributes.md)
@@ -116,6 +114,9 @@ Class | Method | HTTP request | Description
  - [RegistryProvider](docs/RegistryProvider.md)
  - [RegistryProviderData](docs/RegistryProviderData.md)
  - [RegistryProviderDataAttributes](docs/RegistryProviderDataAttributes.md)
+ - [RegistryProviderVersionResponse](docs/RegistryProviderVersionResponse.md)
+ - [RegistryProviderVersionResponseData](docs/RegistryProviderVersionResponseData.md)
+ - [RegistryProviderVersionResponseDataLinks](docs/RegistryProviderVersionResponseDataLinks.md)
  - [RegistryProviderVersionsResponse](docs/RegistryProviderVersionsResponse.md)
  - [RegistryProviderVersionsResponseAttributes](docs/RegistryProviderVersionsResponseAttributes.md)
  - [RegistryProviderVersionsResponseData](docs/RegistryProviderVersionsResponseData.md)

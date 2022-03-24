@@ -600,52 +600,56 @@ func (a *DefaultApiService) GetProviderPlatformExecute(r ApiGetProviderPlatformR
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiGetProviderVersionsRequest struct {
+type ApiGetProviderVersionRequest struct {
 	ctx          context.Context
 	ApiService   *DefaultApiService
 	organization string
 	name         string
+	version      string
 }
 
-func (r ApiGetProviderVersionsRequest) Execute() (*RegistryProviderVersionsResponse, *http.Response, error) {
-	return r.ApiService.GetProviderVersionsExecute(r)
+func (r ApiGetProviderVersionRequest) Execute() (*RegistryProviderVersionResponse, *http.Response, error) {
+	return r.ApiService.GetProviderVersionExecute(r)
 }
 
 /*
-GetProviderVersions Method for GetProviderVersions
+GetProviderVersion Method for GetProviderVersion
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @param organization
  @param name
- @return ApiGetProviderVersionsRequest
+ @param version
+ @return ApiGetProviderVersionRequest
 */
-func (a *DefaultApiService) GetProviderVersions(ctx context.Context, organization string, name string) ApiGetProviderVersionsRequest {
-	return ApiGetProviderVersionsRequest{
+func (a *DefaultApiService) GetProviderVersion(ctx context.Context, organization string, name string, version string) ApiGetProviderVersionRequest {
+	return ApiGetProviderVersionRequest{
 		ApiService:   a,
 		ctx:          ctx,
 		organization: organization,
 		name:         name,
+		version:      version,
 	}
 }
 
 // Execute executes the request
-//  @return RegistryProviderVersionsResponse
-func (a *DefaultApiService) GetProviderVersionsExecute(r ApiGetProviderVersionsRequest) (*RegistryProviderVersionsResponse, *http.Response, error) {
+//  @return RegistryProviderVersionResponse
+func (a *DefaultApiService) GetProviderVersionExecute(r ApiGetProviderVersionRequest) (*RegistryProviderVersionResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue *RegistryProviderVersionsResponse
+		localVarReturnValue *RegistryProviderVersionResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.GetProviderVersions")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.GetProviderVersion")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions"
+	localVarPath := localBasePath + "/v2/organizations/{organization}/registry-providers/private/{organization}/{name}/versions/{version}"
 	localVarPath = strings.Replace(localVarPath, "{"+"organization"+"}", url.PathEscape(parameterToString(r.organization, "")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"name"+"}", url.PathEscape(parameterToString(r.name, "")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"version"+"}", url.PathEscape(parameterToString(r.version, "")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}

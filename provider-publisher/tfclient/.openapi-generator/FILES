@@ -17,8 +17,6 @@ docs/CreateRegistryProviderVersion.md
 docs/CreateRegistryProviderVersionData.md
 docs/CreateRegistryProviderVersionDataAttributes.md
 docs/CreateRegistryProviderVersionResponse.md
-docs/CreateRegistryProviderVersionResponseData.md
-docs/CreateRegistryProviderVersionResponseDataLinks.md
 docs/DefaultApi.md
 docs/GpgKey.md
 docs/GpgKeyData.md
@@ -34,6 +32,9 @@ docs/ProviderPlatformResponseDataLinks.md
 docs/RegistryProvider.md
 docs/RegistryProviderData.md
 docs/RegistryProviderDataAttributes.md
+docs/RegistryProviderVersionResponse.md
+docs/RegistryProviderVersionResponseData.md
+docs/RegistryProviderVersionResponseDataLinks.md
 docs/RegistryProviderVersionsResponse.md
 docs/RegistryProviderVersionsResponseAttributes.md
 docs/RegistryProviderVersionsResponseData.md
@@ -54,8 +55,6 @@ model_create_registry_provider_version.go
 model_create_registry_provider_version_data.go
 model_create_registry_provider_version_data_attributes.go
 model_create_registry_provider_version_response.go
-model_create_registry_provider_version_response_data.go
-model_create_registry_provider_version_response_data_links.go
 model_gpg_key.go
 model_gpg_key_data.go
 model_gpg_key_data_attributes.go
@@ -70,6 +69,9 @@ model_provider_platform_response_data_links.go
 model_registry_provider.go
 model_registry_provider_data.go
 model_registry_provider_data_attributes.go
+model_registry_provider_version_response.go
+model_registry_provider_version_response_data.go
+model_registry_provider_version_response_data_links.go
 model_registry_provider_versions_response.go
 model_registry_provider_versions_response_attributes.go
 model_registry_provider_versions_response_data.go

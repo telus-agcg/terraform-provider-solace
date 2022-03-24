@@ -16,7 +16,7 @@ import (
 
 // CreateRegistryProviderVersionResponse struct for CreateRegistryProviderVersionResponse
 type CreateRegistryProviderVersionResponse struct {
-	Data *CreateRegistryProviderVersionResponseData `json:"data,omitempty"`
+	Data *RegistryProviderVersionResponseData `json:"data,omitempty"`
 }
 
 // NewCreateRegistryProviderVersionResponse instantiates a new CreateRegistryProviderVersionResponse object
@@ -37,9 +37,9 @@ func NewCreateRegistryProviderVersionResponseWithDefaults() *CreateRegistryProvi
 }
 
 // GetData returns the Data field value if set, zero value otherwise.
-func (o *CreateRegistryProviderVersionResponse) GetData() CreateRegistryProviderVersionResponseData {
+func (o *CreateRegistryProviderVersionResponse) GetData() RegistryProviderVersionResponseData {
 	if o == nil || o.Data == nil {
-		var ret CreateRegistryProviderVersionResponseData
+		var ret RegistryProviderVersionResponseData
 		return ret
 	}
 	return *o.Data
@@ -47,7 +47,7 @@ func (o *CreateRegistryProviderVersionResponse) GetData() CreateRegistryProvider
 
 // GetDataOk returns a tuple with the Data field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *CreateRegistryProviderVersionResponse) GetDataOk() (*CreateRegistryProviderVersionResponseData, bool) {
+func (o *CreateRegistryProviderVersionResponse) GetDataOk() (*RegistryProviderVersionResponseData, bool) {
 	if o == nil || o.Data == nil {
 		return nil, false
 	}
@@ -63,8 +63,8 @@ func (o *CreateRegistryProviderVersionResponse) HasData() bool {
 	return false
 }
 
-// SetData gets a reference to the given CreateRegistryProviderVersionResponseData and assigns it to the Data field.
-func (o *CreateRegistryProviderVersionResponse) SetData(v CreateRegistryProviderVersionResponseData) {
+// SetData gets a reference to the given RegistryProviderVersionResponseData and assigns it to the Data field.
+func (o *CreateRegistryProviderVersionResponse) SetData(v RegistryProviderVersionResponseData) {
 	o.Data = &v
 }
 

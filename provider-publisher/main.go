@@ -181,49 +181,51 @@ func UploadFile(filename string, remoteName string, contentType string, url stri
 }
 
 func CreateProviderVersion(name string, version string, keyid string) {
-	getProviderVersionsRes, _, err := client.DefaultApi.GetProviderVersions(
-		ctx, *org, name).Execute()
-	if err != nil {
-		log.Fatalf("Unable to get provider versions: %s\n", err.Error())
-	}
-
 	// Check to see if the requested version already exists
-	found := false
-	for _, v := range getProviderVersionsRes.Data {
-		if *v.Attributes.Version == version {
-			found = true
-		}
-	}
-	if found {
+	getProviderVersionsRes, _, err := client.DefaultApi.GetProviderVersion(
+		ctx, *org, name, version).Execute()
+
+	var shasumsUpload *string
+	var shasumsSigUpload *string
+
+	if err == nil {
 		log.Printf("Provider %s version %s already exists.\n", name, version)
-		return
-	}
-
-	log.Printf("Creating provider %s version %s\n", name, version)
-	providerVersion := tfclient.CreateRegistryProviderVersion{
-		Data: tfclient.CreateRegistryProviderVersionData{
-			Type: "registry-provider-versions",
-			Attributes: tfclient.CreateRegistryProviderVersionDataAttributes{
-				Version:   version,
-				KeyId:     keyid,
-				Protocols: []string{"6.0"},
+		if !*getProviderVersionsRes.Data.Attributes.ShasumsUploaded {
+			shasumsUpload = getProviderVersionsRes.Data.Links.ShasumsUpload
+		}
+		if !*getProviderVersionsRes.Data.Attributes.ShasumsSigUploaded {
+			shasumsSigUpload = getProviderVersionsRes.Data.Links.ShasumsSigUpload
+		}
+	} else {
+		log.Printf("Creating provider %s version %s\n", name, version)
+		providerVersion := tfclient.CreateRegistryProviderVersion{
+			Data: tfclient.CreateRegistryProviderVersionData{
+				Type: "registry-provider-versions",
+				Attributes: tfclient.CreateRegistryProviderVersionDataAttributes{
+					Version:   version,
+					KeyId:     keyid,
+					Protocols: []string{"6.0"},
+				},
 			},
-		},
-	}
-	createProviderVersionRes, _, err := client.DefaultApi.CreateProviderVersion(
-		ctx, *org, name).CreateRegistryProviderVersion(providerVersion).Execute()
-	if err != nil {
-		log.Fatalf("Error creating %s, version %s: %s\n", name, version, err.Error())
+		}
+		createProviderVersionRes, _, err := client.DefaultApi.CreateProviderVersion(
+			ctx, *org, name).CreateRegistryProviderVersion(providerVersion).Execute()
+		if err != nil {
+			log.Fatalf("Error creating %s, version %s: %s\n", name, version, err.Error())
+		}
+
+		shasumsUpload = createProviderVersionRes.Data.Links.ShasumsUpload
+		shasumsSigUpload = createProviderVersionRes.Data.Links.ShasumsSigUpload
 	}
 
-	if !*createProviderVersionRes.Data.Attributes.ShasumsUploaded {
+	if shasumsUpload != nil {
 		UploadFile(NameAndVersionFilePrefix(name, version)+"_SHA256SUMS", "SHA256SUMS", "text/plain",
-			*createProviderVersionRes.Data.Links.ShasumsUpload)
+			*shasumsUpload)
 	}
 
-	if !*createProviderVersionRes.Data.Attributes.ShasumsSigUploaded {
+	if shasumsSigUpload != nil {
 		UploadFile(NameAndVersionFilePrefix(name, version)+"_SHA256SUMS.sig", "SHA256SUMS.sig", "application/octet-stream",
-			*createProviderVersionRes.Data.Links.ShasumsSigUpload)
+			*shasumsSigUpload)
 	}
 
 	return
