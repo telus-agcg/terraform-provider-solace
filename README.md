@@ -73,9 +73,14 @@ $ go build
 
 ## Publishing
 
+1. Set the following environment variables:
+   1. `GITHUB_TOKEN` - Your Github [personal access token](https://github.com/settings/tokens)
+   1. `GPG_FINGERPRINT` - Your GPG key fingerprint without spaces
+   1. `TF_API_TOKEN` - Terraform Cloud [team or personal token](https://www.terraform.io/cloud-docs/users-teams-organizations/api-tokens)
 1. Create a release
    ```
    $ git tag v1.0.0
+   $ cd terraform-provider-solace
    $ goreleaser --rm-dist
    ```
 1. [Create and upload a GPG key](https://www.terraform.io/cloud-docs/registry/publish-providers#publishing-a-provider-and-creating-a-version) to Terraform Cloud, then put the key-id in the [Makefile](Makefile)
