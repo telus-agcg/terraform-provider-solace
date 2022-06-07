@@ -34,5 +34,5 @@ publish: terraform-publisher
 	terraform-publisher					\
 		-organization telusagriculture	\
 		-name solace					\
-		-version 0.3.0					\
+		-version 0.4.0					\
 		-gpg-key 14F5FEA3B2DA691F		

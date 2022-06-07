@@ -31,7 +31,9 @@ func HasChanged[T comparable](v1 *T, v2 *T, changed *bool) {
 		return
 	}
 
-	if v1 == nil && v2 != nil {
+	if v1 == nil && v2 == nil {
+		return
+	} else if v1 == nil && v2 != nil {
 		*changed = true
 	} else if v1 != nil && v2 == nil {
 		*changed = true

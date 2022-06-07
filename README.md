@@ -83,7 +83,7 @@ $ go build
    ```
    $ git tag v1.0.0
    $ cd terraform-provider-solace
-   $ goreleaser --rm-dist
+   $ goreleaser release --rm-dist
    ```
 1. [Create and upload a GPG key](https://www.terraform.io/cloud-docs/registry/publish-providers#publishing-a-provider-and-creating-a-version) to Terraform Cloud, then put the key-id in the [Makefile](Makefile)
 1. Use [terraform-publisher](https://github.com/TelusAg/terraform-publisher) to upload to Terraform Cloud private registry
