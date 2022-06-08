@@ -30,6 +30,7 @@ jobs:
         with:
           go-version-file: 'terraform-provider-solace/go.mod'
           cache: true
+          cache-dependency-path: terraform-provider-solace/go.sum
       -
         name: Import GPG key
         id: import_gpg
