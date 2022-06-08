@@ -3,7 +3,8 @@ format-examples:
 	terraform fmt -recursive ./examples/
 
 docs:
-	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+	go get github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs
+	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs --rendered-website-dir=../docs
 
 openapi: sempv2-config.json
 	rm -rf sempv2
