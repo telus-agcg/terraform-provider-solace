@@ -84,6 +84,7 @@ func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceT
 		"solace_clientprofile":                       clientProfileResourceType{},
 		"solace_clientusername":                      clientUsernameResourceType{},
 		"solace_queue":                               queueResourceType{},
+		"solace_queue_subscription":                  queueSubscriptionResourceType{},
 	}, nil
 }
 
