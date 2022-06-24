@@ -1,12 +1,12 @@
 resource "solace_msgvpn" "vpn2" {
-  msg_vpn_name                         = "vpn2"
+  msg_vpn_name                 = "vpn2"
   enabled                      = true
   authentication_basic_enabled = true
   max_connection_count         = 75
   max_egress_flow_count        = 100
   max_endpoint_count           = 10
   max_ingress_flow_count       = 100
-  max_msg_spool_usage              = 1500
+  max_msg_spool_usage          = 1500
   max_subscription_count       = 100000
   max_transacted_session_count = 50
   max_transaction_count        = 100
@@ -14,16 +14,16 @@ resource "solace_msgvpn" "vpn2" {
 }
 
 resource "solace_clientprofile" "vpn2_client_profile" {
-  msg_vpn_name = solace_msgvpn.vpn2.msg_vpn_name
-  client_profile_name    = "my-client-profile"
+  msg_vpn_name        = solace_msgvpn.vpn2.msg_vpn_name
+  client_profile_name = "my-client-profile"
 }
 
 resource "solace_aclprofile" "vpn2_aclprofile" {
-  msg_vpn_name = solace_msgvpn.vpn2.msg_vpn_name
-  acl_profile_name                             = "aclprofile"
-  client_connect_default_action = "disallow"
-  publish_topic_default_action     = "disallow"
-  subscribe_topic_default_action   = "disallow"
+  msg_vpn_name                   = solace_msgvpn.vpn2.msg_vpn_name
+  acl_profile_name               = "aclprofile"
+  client_connect_default_action  = "disallow"
+  publish_topic_default_action   = "disallow"
+  subscribe_topic_default_action = "disallow"
 }
 
 /*
@@ -55,8 +55,8 @@ resource "solace_aclprofile_subscribeexception" "vpn2_allow_sub_abc" {
 */
 
 resource "solace_clientusername" "vpn2_user1" {
-  msg_vpn_name = solace_msgvpn.vpn2.msg_vpn_name
-  client_username           = "user1"
-  enabled        = true
+  msg_vpn_name        = solace_msgvpn.vpn2.msg_vpn_name
+  client_username     = "user1"
+  enabled             = true
   client_profile_name = solace_clientprofile.vpn2_client_profile.client_profile_name
 }
