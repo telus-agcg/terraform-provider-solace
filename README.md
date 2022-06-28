@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is a Terraform Provider for the Solace message broker. It allows you to configure various resources in Solace using [HCL](https://www.terraform.io/language/syntax/configuration), like other cloud resources compatible with Terraform.
+This is a Terraform Provider for the Solace Event Broker. It allows you to configure various resources in Solace using [HCL](https://www.terraform.io/language/syntax/configuration), like other cloud resources compatible with Terraform.
 
 ## Installation
 
@@ -11,8 +11,8 @@ To install this provider, use the following snippet in your Terraform configurat
 terraform {
   required_providers {
     solace = {
-      source  = "app.terraform.io/telusagriculture/solace"
-      version = "0.3.0"
+      source  = "telusag/solace"
+      version = ">= 0.6.3"
     }
   }
 }
@@ -25,17 +25,14 @@ provider "solace" {
 }
 ```
 
-In order to access this provider, your local Terraform process must either be authenticated to the "[telusagriculture](https://app.terraform.io/app/telusagriculture)" organization in Terraform Cloud (see [`terraform login`](https://www.terraform.io/cli/commands/login)) or be running in Terraform Cloud.
-
 ## Usage
 
-For documentation on the available resources and their properties, see [terraform-provider-solace/docs](terraform-provider-solace/docs/index.md)
+For documentation on the available resources and their properties, see [docs](docs/index.md)
 
 ## Development
 
 To enable provider development, check out the provider and install the binary into your local `~/go/bin` path:
 ```
-$ cd terraform-provider-solace
 $ go install
 ```
 
@@ -45,7 +42,7 @@ In order for Terraform to use the provider installed locally, rather than downlo
 provider_installation {
 
   dev_overrides {
-      "app.terraform.io/telusagriculture/solace" = "your ~/go/bin path"
+      "telusag/solace" = "your ~/go/bin path"
   }
 
   direct {}
@@ -69,24 +66,12 @@ Always run `gofmt -w -s .` before committing to make sure the diffs don't contai
 
 Once the models and schemas are prepared, compile the provider:
 ```
-$ cd terraform-provider-solace
 $ go build
 ```
 
 ## Publishing
 
-1. Set the following environment variables:
-   1. `GITHUB_TOKEN` - Your Github [personal access token](https://github.com/settings/tokens)
-   1. `GPG_FINGERPRINT` - Your GPG key fingerprint without spaces
-   1. `TF_API_TOKEN` - Terraform Cloud [team or personal token](https://www.terraform.io/cloud-docs/users-teams-organizations/api-tokens)
-1. Create a release
-   ```
-   $ git tag v1.0.0
-   $ cd terraform-provider-solace
-   $ goreleaser release --rm-dist
-   ```
-1. [Create and upload a GPG key](https://www.terraform.io/cloud-docs/registry/publish-providers#publishing-a-provider-and-creating-a-version) to Terraform Cloud, then put the key-id in the [Makefile](Makefile)
-1. Use [terraform-publisher](https://github.com/TelusAg/terraform-publisher) to upload to Terraform Cloud private registry
-   ```
-   $ make publish
-   ```
+1. [Create and upload a GPG key](https://www.terraform.io/cloud-docs/registry/publish-providers#publishing-a-provider-and-creating-a-version) to Terraform Cloud.
+1. Set the GPG secret key as an action secret on the repository called GPG_SECRET_KEY, the passphrase should be set as an action secret called PASSPHRASE.
+1. Create a tag on the repository called vx.y.z (v1.0.0) and push the tag to Github.
+1. Github Actions will build and publish the new release

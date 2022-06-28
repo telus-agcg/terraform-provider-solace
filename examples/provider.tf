@@ -1,8 +1,8 @@
 terraform {
   required_providers {
     solace = {
-      source  = "github.com/telusag/solace"
-      version = ">= 1"
+      source  = "TelusAg/solace"
+      version = ">= 0.6.3"
     }
   }
 
