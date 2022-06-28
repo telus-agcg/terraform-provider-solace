@@ -20,7 +20,7 @@ var (
 
 func main() {
 	opts := tfsdk.ServeOpts{
-		Name: "github.com/TelusAg/solace",
+		Name: "registry.terraform.io/telusag/solace",
 	}
 
 	err := tfsdk.Serve(context.Background(), provider.New(version), opts)
