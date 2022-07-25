@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -216,6 +217,19 @@ func contains[T comparable](s []T, e T) bool {
 		if a == e {
 			return true
 		}
+	}
+	return false
+}
+
+func IsNilOrEmpty(str *string) bool {
+	if str == nil {
+		return true
+	}
+	if *str == "" {
+		return true
+	}
+	if strings.Trim(*str, " ") == "" {
+		return true
 	}
 	return false
 }
