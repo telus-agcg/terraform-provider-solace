@@ -6,7 +6,7 @@ import (
 
 	"telusag/terraform-provider-solace/provider"
 
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
 var (
@@ -19,14 +19,13 @@ var (
 )
 
 func main() {
-	opts := tfsdk.ServeOpts{
-		Name: "registry.terraform.io/telusag/solace",
+	opts := providerserver.ServeOpts{
+		Address: "registry.terraform.io/telusag/solace",
 	}
 
-	err := tfsdk.Serve(context.Background(), provider.New(version), opts)
+	err := providerserver.Serve(context.Background(), provider.New(version), opts)
 
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-
 }
