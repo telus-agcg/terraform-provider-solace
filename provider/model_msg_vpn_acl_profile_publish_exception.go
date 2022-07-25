@@ -41,33 +41,21 @@ func MsgVpnAclProfilePublishExceptionSchema(requiredAttributes ...string) tfsdk.
 				Type:        types.StringType,
 				Description: "The name of the ACL Profile. Deprecated since 2.14. Replaced by publishTopicExceptions.",
 				Optional:    true,
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 			},
 			"msg_vpn_name": {
 				Type:        types.StringType,
 				Description: "The name of the Message VPN. Deprecated since 2.14. Replaced by publishTopicExceptions.",
 				Optional:    true,
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 			},
 			"publish_exception_topic": {
 				Type:        types.StringType,
 				Description: "The topic for the exception to the default action taken. May include wildcard characters. Deprecated since 2.14. Replaced by publishTopicExceptions.",
 				Optional:    true,
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 			},
 			"topic_syntax": {
 				Type:        types.StringType,
 				Description: "The syntax of the topic for the exception to the default action taken. The allowed values and their meaning are:  <pre> \"smf\" - Topic uses SMF syntax. \"mqtt\" - Topic uses MQTT syntax. </pre>  Deprecated since 2.14. Replaced by publishTopicExceptions.",
 				Optional:    true,
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 				Validators: []tfsdk.AttributeValidator{
 					util.StringOneOfValidator("smf", "mqtt"),
 				},

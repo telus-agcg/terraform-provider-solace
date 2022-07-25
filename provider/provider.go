@@ -14,7 +14,6 @@ import (
 )
 
 type provider struct {
-	// defaultMsgVpn string
 	configured bool
 	version    string
 
@@ -28,7 +27,6 @@ type providerData struct {
 	Scheme   types.String `tfsdk:"scheme"`
 	Hostname types.String `tfsdk:"hostname"`
 	Insecure types.Bool   `tfsdk:"insecure"`
-	// DefaultMsgVpn types.String `tfsdk:"default_msgvpn"`
 }
 
 func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderRequest, resp *tfsdk.ConfigureProviderResponse) {
@@ -39,12 +37,6 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// if !data.DefaultMsgVpn.Null {
-	// 	p.defaultMsgVpn = data.DefaultMsgVpn.Value
-	// } else {
-	// 	p.defaultMsgVpn = "default"
-	// }
 
 	p.Context = context.WithValue(context.Background(), sempv2.ContextBasicAuth,
 		sempv2.BasicAuth{
@@ -124,11 +116,6 @@ func (p *provider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostic
 				Optional:    true,
 				Description: "Ignore HTTPS certificate errors",
 			},
-			// "default_msgvpn": {
-			// 	Type:        types.StringType,
-			// 	Optional:    true,
-			// 	Description: "Default message vpn for resources, if specified",
-			// },
 		},
 	}, nil
 }

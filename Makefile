@@ -1,4 +1,5 @@
 PKG_NAME=provider
+OPENAPI_GENERATOR_JAR=/usr/local/Cellar/openapi-generator/6.0.1/libexec/openapi-generator-cli.jar
 
 format-examples:
 	terraform fmt -recursive ./examples/
@@ -29,7 +30,7 @@ openapi-provider-generator:
 	mvn -f provider-generator/pom.xml package
 
 generate-provider: openapi-provider-generator
-	java -cp "provider-generator/target/terraform-provider-openapi-generator-1.0.0.jar:/usr/local/Cellar/openapi-generator/5.4.0/libexec/openapi-generator-cli.jar" \
+	java -cp "provider-generator/target/terraform-provider-openapi-generator-1.0.0.jar:$(OPENAPI_GENERATOR_JAR)" \
 		-Dmodels=MsgVpn,MsgVpnQueue,MsgVpnQueueSubscription,MsgVpnClientUsername,MsgVpnAclProfileClientConnectException,MsgVpnAclProfileSubscribeException,MsgVpnAclProfilePublishException,MsgVpnClientProfile \
 	org.openapitools.codegen.OpenAPIGenerator generate \
 		-g terraform-provider \

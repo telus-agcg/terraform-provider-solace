@@ -37,25 +37,16 @@ func MsgVpnAclProfileClientConnectExceptionSchema(requiredAttributes ...string) 
 				Type:        types.StringType,
 				Description: "The name of the ACL Profile.",
 				Optional:    true,
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 			},
 			"client_connect_exception_address": {
 				Type:        types.StringType,
 				Description: "The IP address/netmask of the client connect exception in CIDR form.",
 				Optional:    true,
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 			},
 			"msg_vpn_name": {
 				Type:        types.StringType,
 				Description: "The name of the Message VPN.",
 				Optional:    true,
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 			},
 		},
 	}

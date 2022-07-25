@@ -47,9 +47,6 @@ func {{classname}}Schema(requiredAttributes ...string) tfsdk.Schema {
 				{{^required}}
 				Optional:    true,
 				{{/required}}
-				// PlanModifiers: []tfsdk.AttributePlanModifier{
-				// 	tfsdk.RequiresReplace(),
-				// },
 				{{#allowableValues}}
 				Validators: []tfsdk.AttributeValidator{
 					util.StringOneOfValidator({{#enumVars}}{{^-first}},{{/-first}}{{{value}}}{{/enumVars}}),
