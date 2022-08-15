@@ -9,6 +9,7 @@ import (
 	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -109,7 +110,7 @@ func WithRequiredAttributes(schema tfsdk.Schema, names []string) tfsdk.Schema {
 		}
 		attr.Required = true
 		attr.Optional = false
-		attr.PlanModifiers = append(attr.PlanModifiers, tfsdk.RequiresReplace())
+		attr.PlanModifiers = append(attr.PlanModifiers, resource.RequiresReplace())
 		schema.Attributes[name] = attr
 	}
 	return schema
@@ -232,4 +233,8 @@ func IsNilOrEmpty(str *string) bool {
 		return true
 	}
 	return false
+}
+
+func ToPtr[T any](val T) *T {
+	return &val
 }

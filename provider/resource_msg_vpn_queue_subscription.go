@@ -7,19 +7,21 @@ import (
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-var _ tfsdk.ResourceType = queueSubscriptionResourceType{}
+var _ provider.ResourceType = queueSubscriptionResourceType{}
 
 type queueSubscriptionResourceType struct {
 }
 
-func (t queueSubscriptionResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	provider, diags := convertProviderType(in)
+func (t queueSubscriptionResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
+	solaceProvider, diags := convertProviderType(in)
 
 	return NewResource[MsgVpnQueueSubscription](
-		queueSubscriptionResource{provider: provider}), diags
+		queueSubscriptionResource{solaceProvider: solaceProvider}), diags
 }
 
 func (t queueSubscriptionResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
@@ -29,7 +31,7 @@ func (t queueSubscriptionResourceType) GetSchema(ctx context.Context) (tfsdk.Sch
 var _ solaceProviderResource[MsgVpnQueueSubscription] = queueSubscriptionResource{}
 
 type queueSubscriptionResource struct {
-	provider
+	solaceProvider
 }
 
 func (r queueSubscriptionResource) NewData() *MsgVpnQueueSubscription {

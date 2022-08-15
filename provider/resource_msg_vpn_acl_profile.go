@@ -7,19 +7,21 @@ import (
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-var _ tfsdk.ResourceType = aclProfileResourceType{}
+var _ provider.ResourceType = aclProfileResourceType{}
 
 type aclProfileResourceType struct {
 }
 
-func (t aclProfileResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	provider, diags := convertProviderType(in)
+func (t aclProfileResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
+	solaceProvider, diags := convertProviderType(in)
 
 	return NewResource[MsgVpnAclProfile](
-		aclProfileResource{provider: provider}), diags
+		aclProfileResource{solaceProvider: solaceProvider}), diags
 }
 
 func (t aclProfileResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
@@ -29,7 +31,7 @@ func (t aclProfileResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, di
 var _ solaceProviderResource[MsgVpnAclProfile] = aclProfileResource{}
 
 type aclProfileResource struct {
-	provider
+	solaceProvider
 }
 
 func (r aclProfileResource) NewData() *MsgVpnAclProfile {

@@ -6,19 +6,21 @@ import (
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-var _ tfsdk.ResourceType = aclProfileResourceType{}
+var _ provider.ResourceType = aclProfileResourceType{}
 
 type aclProfileClientConnectExceptionResourceType struct {
 }
 
-func (t aclProfileClientConnectExceptionResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	provider, diags := convertProviderType(in)
+func (t aclProfileClientConnectExceptionResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
+	solaceProvider, diags := convertProviderType(in)
 
 	return NewResource[MsgVpnAclProfileClientConnectException](
-		aclProfileClientConnectExceptionResource{provider: provider}), diags
+		aclProfileClientConnectExceptionResource{solaceProvider: solaceProvider}), diags
 }
 
 func (t aclProfileClientConnectExceptionResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
@@ -28,7 +30,7 @@ func (t aclProfileClientConnectExceptionResourceType) GetSchema(ctx context.Cont
 var _ solaceProviderResource[MsgVpnAclProfile] = aclProfileResource{}
 
 type aclProfileClientConnectExceptionResource struct {
-	provider
+	solaceProvider
 }
 
 func (r aclProfileClientConnectExceptionResource) NewData() *MsgVpnAclProfileClientConnectException {

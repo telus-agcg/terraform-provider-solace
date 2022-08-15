@@ -8,19 +8,21 @@ import (
 	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-var _ tfsdk.ResourceType = queueResourceType{}
+var _ provider.ResourceType = queueResourceType{}
 
 type queueResourceType struct {
 }
 
-func (t queueResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	provider, diags := convertProviderType(in)
+func (t queueResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
+	solaceProvider, diags := convertProviderType(in)
 
 	return NewResource[MsgVpnQueue](
-		queueResource{provider: provider}), diags
+		queueResource{solaceProvider: solaceProvider}), diags
 }
 
 func (t queueResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
@@ -30,7 +32,7 @@ func (t queueResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Di
 var _ solaceProviderResource[MsgVpnQueue] = queueResource{}
 
 type queueResource struct {
-	provider
+	solaceProvider
 }
 
 func (r queueResource) NewData() *MsgVpnQueue {

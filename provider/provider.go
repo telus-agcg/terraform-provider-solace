@@ -11,11 +11,12 @@ import (
 
 	rt "github.com/go-openapi/runtime/client"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-type provider struct {
+type solaceProvider struct {
 	configured bool
 	version    string
 
@@ -31,15 +32,12 @@ type providerData struct {
 	Insecure *bool   `tfsdk:"insecure" env:"SEMP_INSECURE"`
 }
 
-var defaultScheme string = "https"
-var defaultInsecure bool = false
-
-func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderRequest, resp *tfsdk.ConfigureProviderResponse) {
+func (p *solaceProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data providerData
 
 	// Set default values where possible
-	data.Scheme = &defaultScheme
-	data.Insecure = &defaultInsecure
+	data.Scheme = ToPtr("https")
+	data.Insecure = ToPtr(false)
 
 	// Try to get Provider config from environment, if possible.
 	resp.Diagnostics.Append(configureFromEnvironment(ctx, &data)...)
@@ -143,7 +141,7 @@ func configureFromEnvironment(ctx context.Context, data interface{}) (diag diag.
 }
 
 // configureFromTerraformConfig overrides values in 'data' if those same values were provided in the TF config
-func configureFromTerraformConfig(ctx context.Context, req tfsdk.ConfigureProviderRequest, data *providerData) (diag diag.Diagnostics) {
+func configureFromTerraformConfig(ctx context.Context, req provider.ConfigureRequest, data *providerData) (diag diag.Diagnostics) {
 	var dataFromTFConfig providerData
 	req.Config.Get(ctx, &dataFromTFConfig)
 
@@ -166,8 +164,8 @@ func configureFromTerraformConfig(ctx context.Context, req tfsdk.ConfigureProvid
 	return
 }
 
-func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
-	return map[string]tfsdk.ResourceType{
+func (p *solaceProvider) GetResources(ctx context.Context) (map[string]provider.ResourceType, diag.Diagnostics) {
+	return map[string]provider.ResourceType{
 		"solace_msgvpn":     msgVpnResourceType{},
 		"solace_aclprofile": aclProfileResourceType{},
 		"solace_aclprofile_client_connect_exception": aclProfileClientConnectExceptionResourceType{},
@@ -184,7 +182,7 @@ func (p *provider) GetDataSources(ctx context.Context) (map[string]tfsdk.DataSou
 	return map[string]tfsdk.DataSourceType{}, nil
 }
 
-func (p *provider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (p *solaceProvider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Attributes: map[string]tfsdk.Attribute{
 			"username": {
@@ -220,9 +218,9 @@ func (p *provider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostic
 	}, nil
 }
 
-func New(version string) func() tfsdk.Provider {
-	return func() tfsdk.Provider {
-		return &provider{
+func New(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &solaceProvider{
 			version: version,
 		}
 	}
@@ -233,17 +231,17 @@ func New(version string) func() tfsdk.Provider {
 // this helper can be skipped and the provider type can be directly type
 // asserted (e.g. provider: in.(*provider)), however using this can prevent
 // potential panics.
-func convertProviderType(in tfsdk.Provider) (provider, diag.Diagnostics) {
+func convertProviderType(in provider.Provider) (solaceProvider, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	p, ok := in.(*provider)
+	p, ok := in.(*solaceProvider)
 
 	if !ok {
 		diags.AddError(
 			"Unexpected Provider Instance Type",
 			fmt.Sprintf("While creating the data source or resource, an unexpected provider type (%T) was received. This is always a bug in the provider code and should be reported to the provider developers.", p),
 		)
-		return provider{}, diags
+		return solaceProvider{}, diags
 	}
 
 	if p == nil {
@@ -251,7 +249,7 @@ func convertProviderType(in tfsdk.Provider) (provider, diag.Diagnostics) {
 			"Unexpected Provider Instance Type",
 			"While creating the data source or resource, an unexpected empty provider instance was received. This is always a bug in the provider code and should be reported to the provider developers.",
 		)
-		return provider{}, diags
+		return solaceProvider{}, diags
 	}
 
 	return *p, diags

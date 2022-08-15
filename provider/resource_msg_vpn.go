@@ -6,19 +6,21 @@ import (
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-var _ tfsdk.ResourceType = msgVpnResourceType{}
+var _ provider.ResourceType = msgVpnResourceType{}
 
 type msgVpnResourceType struct {
 }
 
-func (t msgVpnResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	provider, diags := convertProviderType(in)
+func (t msgVpnResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
+	solaceProvider, diags := convertProviderType(in)
 
 	return NewResource[MsgVpn](
-		msgVpnResource{provider: provider}), diags
+		msgVpnResource{solaceProvider: solaceProvider}), diags
 }
 
 func (t msgVpnResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
@@ -28,7 +30,7 @@ func (t msgVpnResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.D
 var _ solaceProviderResource[MsgVpn] = msgVpnResource{}
 
 type msgVpnResource struct {
-	provider
+	solaceProvider
 }
 
 func (r msgVpnResource) NewData() *MsgVpn {

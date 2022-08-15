@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
 type solaceProviderResource[Tdat any] interface {
@@ -30,17 +30,17 @@ type solaceProviderResource[Tdat any] interface {
 	Import(string, *Tdat, *diag.Diagnostics)
 }
 
-var _ tfsdk.Resource = resource[struct{}]{}
+var _ resource.Resource = solaceResource[struct{}]{}
 
-type resource[Tdat any] struct {
+type solaceResource[Tdat any] struct {
 	spr solaceProviderResource[Tdat]
 }
 
-func NewResource[Tdat any](spr solaceProviderResource[Tdat]) *resource[Tdat] {
-	return &resource[Tdat]{spr: spr}
+func NewResource[Tdat any](spr solaceProviderResource[Tdat]) *solaceResource[Tdat] {
+	return &solaceResource[Tdat]{spr: spr}
 }
 
-func (r resource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter, diag *diag.Diagnostics) *Tdat {
+func (r solaceResource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter, diag *diag.Diagnostics) *Tdat {
 	data := r.spr.NewData()
 	diags := config.Get(ctx, data)
 	diag.Append(diags...)
@@ -48,12 +48,12 @@ func (r resource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter, 
 	return data
 }
 
-func (r resource[Tdat]) DataToCtx(ctx context.Context, data *Tdat, config TFConfigSetter, diag *diag.Diagnostics) {
+func (r solaceResource[Tdat]) DataToCtx(ctx context.Context, data *Tdat, config TFConfigSetter, diag *diag.Diagnostics) {
 	diags := config.Set(ctx, data)
 	diag.Append(diags...)
 }
 
-func (r resource[Tdat]) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r solaceResource[Tdat]) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	data := r.DataFromCtx(ctx, &req.Plan, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {
@@ -67,7 +67,7 @@ func (r resource[Tdat]) Create(ctx context.Context, req tfsdk.CreateResourceRequ
 	}
 }
 
-func (r resource[Tdat]) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r solaceResource[Tdat]) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	data := r.DataFromCtx(ctx, &req.State, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {
@@ -84,7 +84,7 @@ func (r resource[Tdat]) Read(ctx context.Context, req tfsdk.ReadResourceRequest,
 
 }
 
-func (r resource[Tdat]) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r solaceResource[Tdat]) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	curState := r.DataFromCtx(ctx, &req.State, &resp.Diagnostics)
 	plnState := r.DataFromCtx(ctx, &req.Plan, &resp.Diagnostics)
 
@@ -100,7 +100,7 @@ func (r resource[Tdat]) Update(ctx context.Context, req tfsdk.UpdateResourceRequ
 	}
 }
 
-func (r resource[Tdat]) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r solaceResource[Tdat]) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	data := r.DataFromCtx(ctx, &req.State, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {
@@ -114,7 +114,7 @@ func (r resource[Tdat]) Delete(ctx context.Context, req tfsdk.DeleteResourceRequ
 	}
 }
 
-func (r resource[Tdat]) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (r solaceResource[Tdat]) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	data := r.spr.NewData()
 	r.spr.Import(req.ID, data, &resp.Diagnostics)
 
