@@ -3,20 +3,16 @@ package com.telusagriculture.terraform_provider_generator;
 import org.openapitools.codegen.*;
 import org.openapitools.codegen.languages.AbstractGoCodegen;
 import org.openapitools.codegen.meta.features.SchemaSupportFeature;
-import org.openapitools.codegen.templating.mustache.LowercaseLambda;
 
-import io.swagger.models.properties.*;
 import com.google.common.collect.Iterables;
 import com.samskivert.mustache.Mustache;
-import com.samskivert.mustache.Template;
 import com.samskivert.mustache.Template.Fragment;
 
 import java.util.*;
-import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
 
-public class TerraformProviderGenerator extends AbstractGoCodegen implements CodegenConfig {
+public class TerraformProviderGenerator extends AbstractGoCodegen {
 
   // source folder where to write the files
   protected String sourceFolder = "src";
