@@ -178,8 +178,10 @@ func (p *solaceProvider) GetResources(ctx context.Context) (map[string]provider.
 	}, nil
 }
 
-func (p *provider) GetDataSources(ctx context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
-	return map[string]tfsdk.DataSourceType{}, nil
+func (p *solaceProvider) GetDataSources(ctx context.Context) (map[string]provider.DataSourceType, diag.Diagnostics) {
+	return map[string]provider.DataSourceType{
+		"solace_msgvpn": msgVpnDataSourceType{},
+	}, nil
 }
 
 func (p *solaceProvider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
