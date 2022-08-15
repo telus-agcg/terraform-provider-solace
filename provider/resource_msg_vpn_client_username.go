@@ -26,7 +26,14 @@ func (t clientUsernameResourceType) NewResource(ctx context.Context, in provider
 }
 
 func (t clientUsernameResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnClientUsernameSchema("msg_vpn_name", "client_username"), nil
+	schema := MsgVpnClientUsernameSchema("msg_vpn_name", "client_username")
+
+	// Mark the password as sensitive
+	passwordAttribute := schema.Attributes["password"]
+	passwordAttribute.Sensitive = true
+	schema.Attributes["password"] = passwordAttribute
+
+	return schema, nil
 }
 
 var _ solaceProviderResource[MsgVpnClientUsername] = clientUsernameResource{}
@@ -49,7 +56,12 @@ func (r clientUsernameResource) Read(data *MsgVpnClientUsername, diag *diag.Diag
 	apiReq := r.Client.ClientUsernameApi.GetMsgVpnClientUsername(r.Context, *data.MsgVpnName, *data.ClientUsername)
 	apiResponse, httpResponse, err := apiReq.Execute()
 	if err == nil && apiResponse != nil && apiResponse.Data != nil {
+		// Password from API is always absent, so
+		// preserve the value in TF state to prevent
+		// constant "changes" to password attribute.
+		password := data.Password
 		data.ToTF(apiResponse.Data)
+		data.Password = password
 	}
 	return httpResponse, err
 }
