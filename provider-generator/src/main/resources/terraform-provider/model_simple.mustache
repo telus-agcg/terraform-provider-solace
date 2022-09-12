@@ -54,6 +54,9 @@ func {{classname}}Schema(requiredAttributes ...string) tfsdk.Schema {
 				{{#maxLength}}
 					stringvalidator.LengthAtMost({{maxLength}}),
 				{{/maxLength}}
+				{{#pattern}}
+					stringvalidator.RegexMatches(regexp.MustCompile("{{pattern}}"), "Does not match pattern '{{pattern}}'"),
+				{{/pattern}}
 				{{#allowableValues}}
 					stringvalidator.OneOf({{#enumVars}}{{^-first}},{{/-first}}{{{value}}}{{/enumVars}}),
 				{{/allowableValues}}

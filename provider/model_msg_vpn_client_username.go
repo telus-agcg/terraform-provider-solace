@@ -3,8 +3,10 @@ package provider
 import (
 	"telusag/terraform-provider-solace/sempv2"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"regexp"
 )
 
 // MsgVpnClientUsername struct for MsgVpnClientUsername
@@ -52,7 +54,10 @@ func MsgVpnClientUsernameSchema(requiredAttributes ...string) tfsdk.Schema {
 				Type:        types.StringType,
 				Description: "The ACL Profile of the Client Username. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.LengthAtMost(32),
+				},
 			},
 			"client_profile_name": {
 				Type:        types.StringType,
@@ -64,7 +69,9 @@ func MsgVpnClientUsernameSchema(requiredAttributes ...string) tfsdk.Schema {
 				Type:        types.StringType,
 				Description: "The name of the Client Username.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.RegexMatches(regexp.MustCompile("/[[[:print:]]]{1,189}/"), "Does not match pattern '/[[[:print:]]]{1,189}/'"),
+				},
 			},
 			"enabled": {
 				Type:        types.BoolType,

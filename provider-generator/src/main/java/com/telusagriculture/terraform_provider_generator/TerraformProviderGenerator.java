@@ -43,12 +43,14 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
    */
   @SuppressWarnings("unchecked")
   @Override
-  public Map<String, Object> postProcessOperationsWithModels(Map<String, Object> objs, List<Object> allModels) {
+  public Map<String, Object> postProcessModels(Map<String, Object> objs) {
         // The superclass determines the list of required golang imports. The actual list of imports
         // depends on which types are used, some of which are changed in the code below (but then preserved
         // and used through x-go-base-type in templates). So super.postProcessModels
         // must be invoked at the beginning of this method.
         objs = super.postProcessModels(objs);
+
+        List<Map<String, String>> imports = (List<Map<String, String>>) objs.get("imports");
 
         List<Map<String, Object>> models = (List<Map<String, Object>>) objs.get("models");
         if(models == null) return objs;
@@ -63,6 +65,15 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
 
                 for (CodegenProperty param : Iterables.concat(model.vars, model.allVars, model.requiredVars, model.optionalVars)) {
                     param.vendorExtensions.put("x-go-base-type", param.dataType);
+
+                    if(param.minLength != null || param.maxLength != null || param.allowableValues != null) {
+                        imports.add(createMapping("import", "github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"));
+                    }
+
+                    if(param.pattern != null) {
+                        imports.add(createMapping("import", "regexp"));
+                    }
+
                     if (!param.isNullable || param.isContainer || param.isFreeFormObject
                             || (param.isAnyType && !param.isModel)) {
                         continue;
@@ -80,6 +91,7 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
                 }
             }
         }
+
         return objs;
   }
 

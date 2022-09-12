@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Generator" type="Application" factoryName="Application">
+    <envs>
+      <env name="GO_POST_PROCESS_FILE" value="/usr/local/go/bin/gofmt -w" />
+    </envs>
+    <option name="INCLUDE_PROVIDED_SCOPE" value="true" />
+    <option name="MAIN_CLASS_NAME" value="org.openapitools.codegen.OpenAPIGenerator" />
+    <module name="terraform-provider-openapi-generator" />
+    <option name="PROGRAM_PARAMETERS" value="generate -g terraform-provider -i sempv2-config.json --skip-validate-spec --output provider --package-name provider --enable-post-process-file" />
+    <option name="VM_PARAMETERS" value="-Dmodels=MsgVpn,MsgVpnQueue,MsgVpnQueueSubscription,MsgVpnClientUsername,MsgVpnAclProfile,MsgVpnAclProfileClientConnectException,MsgVpnAclProfileSubscribeException,MsgVpnAclProfilePublishException,MsgVpnClientProfile,MsgVpnAuthenticationOauthProfile" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -3,6 +3,7 @@ package provider
 import (
 	"telusag/terraform-provider-solace/sempv2"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -37,7 +38,10 @@ func MsgVpnAclProfileClientConnectExceptionSchema(requiredAttributes ...string) 
 				Type:        types.StringType,
 				Description: "The name of the ACL Profile.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.LengthAtMost(32),
+				},
 			},
 			"client_connect_exception_address": {
 				Type:        types.StringType,

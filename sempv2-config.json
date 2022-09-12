@@ -2195,7 +2195,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The name of the ACL Profile.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "clientConnectExceptionAddress": {
           "description": "The IP address/netmask of the client connect exception in CIDR form.",
@@ -2294,7 +2296,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The name of the ACL Profile. Deprecated since 2.14. Replaced by publishTopicExceptions.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "msgVpnName": {
           "description": "The name of the Message VPN. Deprecated since 2.14. Replaced by publishTopicExceptions.",
@@ -2368,7 +2372,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The name of the ACL Profile.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "msgVpnName": {
           "description": "The name of the Message VPN.",
@@ -2459,7 +2465,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The name of the ACL Profile. Deprecated since 2.14. Replaced by subscribeTopicExceptions.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "msgVpnName": {
           "description": "The name of the Message VPN. Deprecated since 2.14. Replaced by subscribeTopicExceptions.",
@@ -2533,7 +2541,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The name of the ACL Profile.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "msgVpnName": {
           "description": "The name of the Message VPN.",
@@ -2607,7 +2617,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The name of the ACL Profile.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "msgVpnName": {
           "description": "The name of the Message VPN.",
@@ -3193,7 +3205,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The ACL Profile of the Authorization Group. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "authorizationGroupName": {
           "description": "The name of the Authorization Group. For LDAP groups, special care is needed if the group name contains special characters such as '#', '+', ';', '=' as the value of the group name returned from the LDAP server might prepend those characters with '\\'. For example a group name called 'test#,lab,com' will be returned from the LDAP server as 'test\\#,lab,com'.",
@@ -3391,7 +3405,8 @@
         },
         "clientUsername": {
           "description": "The Client Username the Bridge uses to login to the remote Message VPN. This per remote Message VPN value overrides the value provided for the Bridge overall. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "[[[:print:]]]{1,189}"
         },
         "compressedDataEnabled": {
           "description": "Enable or disable data compression for the remote Message VPN connection. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
@@ -4017,7 +4032,9 @@
       "properties": {
         "aclProfileName": {
           "description": "The ACL Profile of the Client Username. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
         },
         "clientProfileName": {
           "description": "The Client Profile of the Client Username. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
@@ -4025,7 +4042,8 @@
         },
         "clientUsername": {
           "description": "The name of the Client Username.",
-          "type": "string"
+          "type": "string",
+          "pattern": "[[[:print:]]]{1,189}"
         },
         "enabled": {
           "description": "Enable or disable the Client Username. When disabled, all clients currently connected as the Client Username are disconnected. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",

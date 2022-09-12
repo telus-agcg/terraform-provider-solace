@@ -41,7 +41,10 @@ func MsgVpnAclProfileSubscribeExceptionSchema(requiredAttributes ...string) tfsd
 				Type:        types.StringType,
 				Description: "The name of the ACL Profile. Deprecated since 2.14. Replaced by subscribeTopicExceptions.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.LengthAtMost(32),
+				},
 			},
 			"msg_vpn_name": {
 				Type:        types.StringType,
