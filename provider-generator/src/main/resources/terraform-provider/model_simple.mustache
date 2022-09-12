@@ -47,11 +47,17 @@ func {{classname}}Schema(requiredAttributes ...string) tfsdk.Schema {
 				{{^required}}
 				Optional:    true,
 				{{/required}}
-				{{#allowableValues}}
 				Validators: []tfsdk.AttributeValidator{
-					util.StringOneOfValidator({{#enumVars}}{{^-first}},{{/-first}}{{{value}}}{{/enumVars}}),
-				},
+				{{#minLength}}
+					stringvalidator.LengthAtLeast({{minLength}}),
+				{{/minLength}}
+				{{#maxLength}}
+					stringvalidator.LengthAtMost({{maxLength}}),
+				{{/maxLength}}
+				{{#allowableValues}}
+					stringvalidator.OneOf({{#enumVars}}{{^-first}},{{/-first}}{{{value}}}{{/enumVars}}),
 				{{/allowableValues}}
+				},
 			},
 			{{/vars}}
 		},

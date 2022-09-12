@@ -31,7 +31,7 @@ openapi-provider-generator:
 
 generate-provider: openapi-provider-generator
 	java -cp "provider-generator/target/terraform-provider-openapi-generator-1.0.0.jar:$(OPENAPI_GENERATOR_JAR)" \
-		-Dmodels=MsgVpn,MsgVpnQueue,MsgVpnQueueSubscription,MsgVpnClientUsername,MsgVpnAclProfileClientConnectException,MsgVpnAclProfileSubscribeException,MsgVpnAclProfilePublishException,MsgVpnClientProfile \
+		-Dmodels=MsgVpn,MsgVpnQueue,MsgVpnQueueSubscription,MsgVpnClientUsername,MsgVpnAclProfile,MsgVpnAclProfileClientConnectException,MsgVpnAclProfileSubscribeException,MsgVpnAclProfilePublishException,MsgVpnClientProfile,MsgVpnAuthenticationOauthProfile \
 	org.openapitools.codegen.OpenAPIGenerator generate \
 		-g terraform-provider \
 		-i sempv2-config.json \

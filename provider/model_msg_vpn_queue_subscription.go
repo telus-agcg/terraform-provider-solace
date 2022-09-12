@@ -37,16 +37,19 @@ func MsgVpnQueueSubscriptionSchema(requiredAttributes ...string) tfsdk.Schema {
 				Type:        types.StringType,
 				Description: "The name of the Message VPN.",
 				Optional:    true,
+				Validators:  []tfsdk.AttributeValidator{},
 			},
 			"queue_name": {
 				Type:        types.StringType,
 				Description: "The name of the Queue.",
 				Optional:    true,
+				Validators:  []tfsdk.AttributeValidator{},
 			},
 			"subscription_topic": {
 				Type:        types.StringType,
 				Description: "The topic of the Subscription.",
 				Optional:    true,
+				Validators:  []tfsdk.AttributeValidator{},
 			},
 		},
 	}

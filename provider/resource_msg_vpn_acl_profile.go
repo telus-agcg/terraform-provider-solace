@@ -39,7 +39,9 @@ func (r aclProfileResource) NewData() *MsgVpnAclProfile {
 }
 
 func (r aclProfileResource) Create(data *MsgVpnAclProfile, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.AclProfileApi.CreateMsgVpnAclProfile(r.Context, *data.MsgVpnName).Body(data.ToApi())
+	apiReq := r.Client.AclProfileApi.
+		CreateMsgVpnAclProfile(r.Context, *data.MsgVpnName).
+		Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }
@@ -54,7 +56,9 @@ func (r aclProfileResource) Read(data *MsgVpnAclProfile, diag *diag.Diagnostics)
 }
 
 func (r aclProfileResource) Update(_ *MsgVpnAclProfile, data *MsgVpnAclProfile, diag *diag.Diagnostics) (*http.Response, error) {
-	apiReq := r.Client.AclProfileApi.UpdateMsgVpnAclProfile(r.Context, *data.MsgVpnName, *data.AclProfileName).Body(data.ToApi())
+	apiReq := r.Client.AclProfileApi.
+		UpdateMsgVpnAclProfile(r.Context, *data.MsgVpnName, *data.AclProfileName).
+		Body(*data.ToApi())
 	_, httpResponse, err := apiReq.Execute()
 	return httpResponse, err
 }

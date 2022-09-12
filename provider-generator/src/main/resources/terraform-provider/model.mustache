@@ -3,8 +3,8 @@ package {{packageName}}
 {{#models}}
 import (
 	"telusag/terraform-provider-solace/sempv2"
-	"telusag/terraform-provider-solace/util"
 	
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )

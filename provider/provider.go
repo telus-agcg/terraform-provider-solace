@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"strconv"
 	"telusag/terraform-provider-solace/sempv2"
-	"telusag/terraform-provider-solace/util"
 
 	rt "github.com/go-openapi/runtime/client"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -166,8 +166,8 @@ func configureFromTerraformConfig(ctx context.Context, req provider.ConfigureReq
 
 func (p *solaceProvider) GetResources(ctx context.Context) (map[string]provider.ResourceType, diag.Diagnostics) {
 	return map[string]provider.ResourceType{
-		"solace_msgvpn":     msgVpnResourceType{},
-		"solace_aclprofile": aclProfileResourceType{},
+		"solace_msgvpn":                              msgVpnResourceType{},
+		"solace_aclprofile":                          aclProfileResourceType{},
 		"solace_aclprofile_client_connect_exception": aclProfileClientConnectExceptionResourceType{},
 		"solace_aclprofile_publish_exception":        aclProfilePublishExceptionResourceType{},
 		"solace_aclprofile_subscribe_exception":      aclProfileSubscribeExceptionResourceType{},
@@ -203,7 +203,7 @@ func (p *solaceProvider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diag
 				Optional:    true,
 				Description: "URL scheme to use: http or https (env: SEMP_SCHEME)",
 				Validators: []tfsdk.AttributeValidator{
-					util.StringOneOfValidator("http", "https"),
+					stringvalidator.OneOf("http", "https"),
 				},
 			},
 			"hostname": {
