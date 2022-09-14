@@ -1,5 +1,6 @@
 PKG_NAME=provider
 OPENAPI_GENERATOR_JAR=/usr/local/Cellar/openapi-generator/6.0.1/libexec/openapi-generator-cli.jar
+GO_POST_PROCESS_FILE="$(shell which gofmt) -w"
 MODELS=MsgVpn,$\
 	MsgVpnQueue,$\
 	MsgVpnQueueSubscription,$\
@@ -40,7 +41,7 @@ openapi-provider-generator:
 	mvn -f provider-generator/pom.xml clean package
 
 generate-provider: openapi-provider-generator
-	GO_POST_PROCESS_FILE="$(shell which gofmt) -w" \
+	GO_POST_PROCESS_FILE=$(GO_POST_PROCESS_FILE) \
 	java -cp "provider-generator/target/terraform-provider-openapi-generator-1.0.0.jar:$(OPENAPI_GENERATOR_JAR)" \
 		-Dmodels=$(MODELS) \
 	org.openapitools.codegen.OpenAPIGenerator generate \
