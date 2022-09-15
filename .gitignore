@@ -1,3 +1,4 @@
 target
 dist
 examples/.terraform*
+provider-generator/.idea
