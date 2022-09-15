@@ -7,6 +7,7 @@ import org.openapitools.codegen.meta.features.SchemaSupportFeature;
 import com.google.common.collect.Iterables;
 import com.samskivert.mustache.Mustache;
 import com.samskivert.mustache.Template.Fragment;
+import org.openapitools.codegen.model.ModelsMap;
 
 import java.util.*;
 import java.io.IOException;
@@ -43,7 +44,7 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
    */
   @SuppressWarnings("unchecked")
   @Override
-  public Map<String, Object> postProcessModels(Map<String, Object> objs) {
+  public ModelsMap postProcessModels(ModelsMap objs) {
         // The superclass determines the list of required golang imports. The actual list of imports
         // depends on which types are used, some of which are changed in the code below (but then preserved
         // and used through x-go-base-type in templates). So super.postProcessModels
