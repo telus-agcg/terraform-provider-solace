@@ -70,7 +70,7 @@ func MsgVpnClientUsernameSchema(requiredAttributes ...string) tfsdk.Schema {
 				Description: "The name of the Client Username.",
 				Optional:    true,
 				Validators: []tfsdk.AttributeValidator{
-					stringvalidator.RegexMatches(regexp.MustCompile("/[[[:print:]]]{1,189}/"), "Does not match pattern '/[[[:print:]]]{1,189}/'"),
+					stringvalidator.RegexMatches(regexp.MustCompile("^[[:print:]]{1,189}$"), "Does not match pattern '^[[:print:]]{1,189}$'"),
 				},
 			},
 			"enabled": {

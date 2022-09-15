@@ -3406,7 +3406,7 @@
         "clientUsername": {
           "description": "The Client Username the Bridge uses to login to the remote Message VPN. This per remote Message VPN value overrides the value provided for the Bridge overall. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
           "type": "string",
-          "pattern": "[[[:print:]]]{1,189}"
+          "pattern": "^[[:print:]]{1,189}$"
         },
         "compressedDataEnabled": {
           "description": "Enable or disable data compression for the remote Message VPN connection. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
@@ -4043,7 +4043,7 @@
         "clientUsername": {
           "description": "The name of the Client Username.",
           "type": "string",
-          "pattern": "[[[:print:]]]{1,189}"
+          "pattern": "^[[:print:]]{1,189}$"
         },
         "enabled": {
           "description": "Enable or disable the Client Username. When disabled, all clients currently connected as the Client Username are disconnected. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
@@ -5571,7 +5571,8 @@
         },
         "owner": {
           "description": "The Client Username that owns the Queue and has permission equivalent to `\"delete\"`. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[[:print:]]{1,189}$"
         },
         "permission": {
           "description": "The permission level for all consumers of the Queue, excluding the owner. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"no-access\"`. The allowed values and their meaning are:\n\n<pre>\n\"no-access\" - Disallows all access.\n\"read-only\" - Read-only access to the messages.\n\"consume\" - Consume (read and remove) messages.\n\"modify-topic\" - Consume messages or modify the topic/selector.\n\"delete\" - Consume messages, modify the topic/selector or delete the Client created endpoint altogether.\n</pre>\n",

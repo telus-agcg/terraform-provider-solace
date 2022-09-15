@@ -73,6 +73,9 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
 
                     if(param.pattern != null) {
                         imports.add(createMapping("import", "regexp"));
+                        if(param.pattern.charAt(0) == '/' && param.pattern.charAt(param.pattern.length()-1) == '/') {
+                            param.pattern = param.pattern.substring(1, param.pattern.length() - 1);
+                        }
                     }
 
                     if (!param.isNullable || param.isContainer || param.isFreeFormObject
