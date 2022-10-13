@@ -167,6 +167,7 @@ func configureFromTerraformConfig(ctx context.Context, req provider.ConfigureReq
 func (p *solaceProvider) GetResources(ctx context.Context) (map[string]provider.ResourceType, diag.Diagnostics) {
 	return map[string]provider.ResourceType{
 		"solace_msgvpn":                              msgVpnResourceType{},
+		"solace_oauthprofile":                        oauthProfileResourceType{},
 		"solace_aclprofile":                          aclProfileResourceType{},
 		"solace_aclprofile_client_connect_exception": aclProfileClientConnectExceptionResourceType{},
 		"solace_aclprofile_publish_exception":        aclProfilePublishExceptionResourceType{},
@@ -175,6 +176,7 @@ func (p *solaceProvider) GetResources(ctx context.Context) (map[string]provider.
 		"solace_clientusername":                      clientUsernameResourceType{},
 		"solace_queue":                               queueResourceType{},
 		"solace_queue_subscription":                  queueSubscriptionResourceType{},
+		"solace_client_cert_authority":               clientCertAuthorityResourceType{},
 	}, nil
 }
 

@@ -1,5 +1,5 @@
 PKG_NAME=provider
-OPENAPI_GENERATOR_JAR=/usr/local/Cellar/openapi-generator/6.1.0/libexec/openapi-generator-cli.jar
+OPENAPI_GENERATOR_JAR=/usr/local/Cellar/openapi-generator/6.2.0/libexec/openapi-generator-cli.jar
 GO_POST_PROCESS_FILE="$(shell which gofmt) -w"
 MODELS=MsgVpn,$\
 	MsgVpnQueue,$\
@@ -10,7 +10,8 @@ MODELS=MsgVpn,$\
 	MsgVpnAclProfileSubscribeException,$\
 	MsgVpnAclProfilePublishException,$\
 	MsgVpnClientProfile,$\
-	MsgVpnAuthenticationOauthProfile
+	MsgVpnAuthenticationOauthProfile,$\
+	ClientCertAuthority
 
 format-examples:
 	terraform fmt -recursive ./examples/
