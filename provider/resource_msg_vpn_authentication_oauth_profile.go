@@ -1,37 +1,35 @@
 package provider
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = queueResourceType{}
-
-type oauthProfileResourceType struct {
+func NewMsgVpnAuthenticationOauthProfileResource() resource.Resource {
+	return &solaceResource[MsgVpnAuthenticationOauthProfile]{spr: &oauthProfileResource{}}
 }
 
-func (t oauthProfileResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpnAuthenticationOauthProfile](
-		oauthProfileResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t oauthProfileResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnAuthenticationOauthProfileSchema("msg_vpn_name", "oauth_profile_name"), nil
-}
-
-var _ solaceProviderResource[MsgVpnAuthenticationOauthProfile] = oauthProfileResource{}
+var _ solaceProviderResource[MsgVpnAuthenticationOauthProfile] = &oauthProfileResource{}
 
 type oauthProfileResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r oauthProfileResource) Name() string {
+	return "oauthprofile"
+}
+
+func (r oauthProfileResource) Schema() schema.Schema {
+	return MsgVpnAuthenticationOauthProfileResourceSchema("msg_vpn_name", "oauth_profile_name")
+}
+
+func (r *oauthProfileResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r oauthProfileResource) NewData() *MsgVpnAuthenticationOauthProfile {

@@ -1,12 +1,12 @@
 package provider
 
 import (
-	"telusag/terraform-provider-solace/sempv2"
-
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"regexp"
+	"telusag/terraform-provider-solace/sempv2"
 )
 
 // MsgVpnQueue struct for MsgVpnQueue
@@ -99,177 +99,270 @@ func (tfData *MsgVpnQueue) ToApi() *sempv2.MsgVpnQueue {
 	}
 }
 
-// Terraform schema for MsgVpnQueue
-func MsgVpnQueueSchema(requiredAttributes ...string) tfsdk.Schema {
-	schema := tfsdk.Schema{
+// Terraform DataSource schema for MsgVpnQueue
+func MsgVpnQueueDataSourceSchema(requiredAttributes ...string) dschema.Schema {
+	schema := dschema.Schema{
 		Description: "MsgVpnQueue",
-		Attributes: map[string]tfsdk.Attribute{
-			"access_type": {
-				Type:        types.StringType,
+		Attributes: map[string]dschema.Attribute{
+			"access_type": dschema.StringAttribute{
 				Description: "The access type for delivering messages to consumer flows bound to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"exclusive\"`. The allowed values and their meaning are:  <pre> \"exclusive\" - Exclusive delivery of messages to the first bound consumer flow. \"non-exclusive\" - Non-exclusive delivery of messages to all bound consumer flows in a round-robin fashion. </pre> ",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
+
+				Validators: []validator.String{
 					stringvalidator.OneOf("exclusive", "non-exclusive"),
 				},
 			},
-			"consumer_ack_propagation_enabled": {
-				Type:        types.BoolType,
+			"consumer_ack_propagation_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable the propagation of consumer acknowledgements (ACKs) received on the active replication Message VPN to the standby replication Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"dead_msg_queue": {
-				Type:        types.StringType,
+			"dead_msg_queue": dschema.StringAttribute{
 				Description: "The name of the Dead Message Queue (DMQ) used by the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"#DEAD_MSG_QUEUE\"`. Available since 2.2.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"delivery_count_enabled": {
-				Type:        types.BoolType,
+			"delivery_count_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable the ability for client applications to query the message delivery count of messages received from the Queue. This is a controlled availability feature. Please contact support to find out if this feature is supported for your use case. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.19.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"delivery_delay": {
-				Type:        types.Int64Type,
+			"delivery_delay": dschema.Int64Attribute{
 				Description: "The delay, in seconds, to apply to messages arriving on the Queue before the messages are eligible for delivery. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`. Available since 2.22.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"egress_enabled": {
-				Type:        types.BoolType,
+			"egress_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable the transmission of messages from the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"event_bind_count_threshold": {
-				Type:        EventThresholdType,
-				Description: "",
-				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
+			"event_bind_count_threshold": dschema.ObjectAttribute{
+				Description:    "",
+				Optional:       true,
+				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_msg_spool_usage_threshold": {
-				Type:        EventThresholdType,
-				Description: "",
-				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
+			"event_msg_spool_usage_threshold": dschema.ObjectAttribute{
+				Description:    "",
+				Optional:       true,
+				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_reject_low_priority_msg_limit_threshold": {
-				Type:        EventThresholdType,
-				Description: "",
-				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
+			"event_reject_low_priority_msg_limit_threshold": dschema.ObjectAttribute{
+				Description:    "",
+				Optional:       true,
+				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"ingress_enabled": {
-				Type:        types.BoolType,
+			"ingress_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable the reception of messages to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"max_bind_count": {
-				Type:        types.Int64Type,
+			"max_bind_count": dschema.Int64Attribute{
 				Description: "The maximum number of consumer flows that can bind to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"max_delivered_unacked_msgs_per_flow": {
-				Type:        types.Int64Type,
+			"max_delivered_unacked_msgs_per_flow": dschema.Int64Attribute{
 				Description: "The maximum number of messages delivered but not acknowledged per flow for the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `10000`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"max_msg_size": {
-				Type:        types.Int64Type,
+			"max_msg_size": dschema.Int64Attribute{
 				Description: "The maximum message size allowed in the Queue, in bytes (B). Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `10000000`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"max_msg_spool_usage": {
-				Type:        types.Int64Type,
+			"max_msg_spool_usage": dschema.Int64Attribute{
 				Description: "The maximum message spool usage allowed by the Queue, in megabytes (MB). A value of 0 only allows spooling of the last message received and disables quota checking. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `5000`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"max_redelivery_count": {
-				Type:        types.Int64Type,
+			"max_redelivery_count": dschema.Int64Attribute{
 				Description: "The maximum number of times the Queue will attempt redelivery of a message prior to it being discarded or moved to the DMQ. A value of 0 means to retry forever. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"max_ttl": {
-				Type:        types.Int64Type,
+			"max_ttl": dschema.Int64Attribute{
 				Description: "The maximum time in seconds a message can stay in the Queue when `respectTtlEnabled` is `\"true\"`. A message expires when the lesser of the sender assigned time-to-live (TTL) in the message and the `maxTtl` configured for the Queue, is exceeded. A value of 0 disables expiry. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"msg_vpn_name": {
-				Type:        types.StringType,
+			"msg_vpn_name": dschema.StringAttribute{
 				Description: "The name of the Message VPN.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"owner": {
-				Type:        types.StringType,
+			"owner": dschema.StringAttribute{
 				Description: "The Client Username that owns the Queue and has permission equivalent to `\"delete\"`. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
+
+				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile("^[[:print:]]{1,189}$"), "Does not match pattern '^[[:print:]]{1,189}$'"),
 				},
 			},
-			"permission": {
-				Type:        types.StringType,
+			"permission": dschema.StringAttribute{
 				Description: "The permission level for all consumers of the Queue, excluding the owner. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"no-access\"`. The allowed values and their meaning are:  <pre> \"no-access\" - Disallows all access. \"read-only\" - Read-only access to the messages. \"consume\" - Consume (read and remove) messages. \"modify-topic\" - Consume messages or modify the topic/selector. \"delete\" - Consume messages, modify the topic/selector or delete the Client created endpoint altogether. </pre> ",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
+
+				Validators: []validator.String{
 					stringvalidator.OneOf("no-access", "read-only", "consume", "modify-topic", "delete"),
 				},
 			},
-			"queue_name": {
-				Type:        types.StringType,
+			"queue_name": dschema.StringAttribute{
 				Description: "The name of the Queue.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"redelivery_enabled": {
-				Type:        types.BoolType,
+			"redelivery_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable message redelivery. When enabled, the number of redelivery attempts is controlled by maxRedeliveryCount. When disabled, the message will never be delivered from the queue more than once. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`. Available since 2.18.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"reject_low_priority_msg_enabled": {
-				Type:        types.BoolType,
+			"reject_low_priority_msg_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable the checking of low priority messages against the `rejectLowPriorityMsgLimit`. This may only be enabled if `rejectMsgToSenderOnDiscardBehavior` does not have a value of `\"never\"`. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"reject_low_priority_msg_limit": {
-				Type:        types.Int64Type,
+			"reject_low_priority_msg_limit": dschema.Int64Attribute{
 				Description: "The number of messages of any priority in the Queue above which low priority messages are not admitted but higher priority messages are allowed. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"reject_msg_to_sender_on_discard_behavior": {
-				Type:        types.StringType,
+			"reject_msg_to_sender_on_discard_behavior": dschema.StringAttribute{
 				Description: "Determines when to return negative acknowledgements (NACKs) to sending clients on message discards. Note that NACKs cause the message to not be delivered to any destination and Transacted Session commits to fail. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"when-queue-enabled\"`. The allowed values and their meaning are:  <pre> \"always\" - Always return a negative acknowledgment (NACK) to the sending client on message discard. \"when-queue-enabled\" - Only return a negative acknowledgment (NACK) to the sending client on message discard when the Queue is enabled. \"never\" - Never return a negative acknowledgment (NACK) to the sending client on message discard. </pre>  Available since 2.1.",
 				Optional:    true,
-				Validators: []tfsdk.AttributeValidator{
+
+				Validators: []validator.String{
 					stringvalidator.OneOf("always", "when-queue-enabled", "never"),
 				},
 			},
-			"respect_msg_priority_enabled": {
-				Type:        types.BoolType,
+			"respect_msg_priority_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable the respecting of message priority. When enabled, messages contained in the Queue are delivered in priority order, from 9 (highest) to 0 (lowest). MQTT queues do not support enabling message priority. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.8.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"respect_ttl_enabled": {
-				Type:        types.BoolType,
+			"respect_ttl_enabled": dschema.BoolAttribute{
 				Description: "Enable or disable the respecting of the time-to-live (TTL) for messages in the Queue. When enabled, expired messages are discarded or moved to the DMQ. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
 		},
 	}
 
-	return WithRequiredAttributes(schema, requiredAttributes)
+	return schema
+}
+
+// Terraform Resource schema for MsgVpnQueue
+func MsgVpnQueueResourceSchema(requiredAttributes ...string) rschema.Schema {
+	schema := rschema.Schema{
+		Description: "MsgVpnQueue",
+		Attributes: map[string]rschema.Attribute{
+			"access_type": rschema.StringAttribute{
+				Description: "The access type for delivering messages to consumer flows bound to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"exclusive\"`. The allowed values and their meaning are:  <pre> \"exclusive\" - Exclusive delivery of messages to the first bound consumer flow. \"non-exclusive\" - Non-exclusive delivery of messages to all bound consumer flows in a round-robin fashion. </pre> ",
+				Optional:    true,
+
+				Validators: []validator.String{
+					stringvalidator.OneOf("exclusive", "non-exclusive"),
+				},
+			},
+			"consumer_ack_propagation_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable the propagation of consumer acknowledgements (ACKs) received on the active replication Message VPN to the standby replication Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
+				Optional:    true,
+			},
+			"dead_msg_queue": rschema.StringAttribute{
+				Description: "The name of the Dead Message Queue (DMQ) used by the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"#DEAD_MSG_QUEUE\"`. Available since 2.2.",
+				Optional:    true,
+			},
+			"delivery_count_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable the ability for client applications to query the message delivery count of messages received from the Queue. This is a controlled availability feature. Please contact support to find out if this feature is supported for your use case. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.19.",
+				Optional:    true,
+			},
+			"delivery_delay": rschema.Int64Attribute{
+				Description: "The delay, in seconds, to apply to messages arriving on the Queue before the messages are eligible for delivery. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`. Available since 2.22.",
+				Optional:    true,
+			},
+			"egress_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable the transmission of messages from the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
+				Optional:    true,
+			},
+			"event_bind_count_threshold": rschema.ObjectAttribute{
+				Description:    "",
+				Optional:       true,
+				AttributeTypes: EventThresholdAttributeTypes,
+			},
+			"event_msg_spool_usage_threshold": rschema.ObjectAttribute{
+				Description:    "",
+				Optional:       true,
+				AttributeTypes: EventThresholdAttributeTypes,
+			},
+			"event_reject_low_priority_msg_limit_threshold": rschema.ObjectAttribute{
+				Description:    "",
+				Optional:       true,
+				AttributeTypes: EventThresholdAttributeTypes,
+			},
+			"ingress_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable the reception of messages to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
+				Optional:    true,
+			},
+			"max_bind_count": rschema.Int64Attribute{
+				Description: "The maximum number of consumer flows that can bind to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
+				Optional:    true,
+			},
+			"max_delivered_unacked_msgs_per_flow": rschema.Int64Attribute{
+				Description: "The maximum number of messages delivered but not acknowledged per flow for the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `10000`.",
+				Optional:    true,
+			},
+			"max_msg_size": rschema.Int64Attribute{
+				Description: "The maximum message size allowed in the Queue, in bytes (B). Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `10000000`.",
+				Optional:    true,
+			},
+			"max_msg_spool_usage": rschema.Int64Attribute{
+				Description: "The maximum message spool usage allowed by the Queue, in megabytes (MB). A value of 0 only allows spooling of the last message received and disables quota checking. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `5000`.",
+				Optional:    true,
+			},
+			"max_redelivery_count": rschema.Int64Attribute{
+				Description: "The maximum number of times the Queue will attempt redelivery of a message prior to it being discarded or moved to the DMQ. A value of 0 means to retry forever. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
+				Optional:    true,
+			},
+			"max_ttl": rschema.Int64Attribute{
+				Description: "The maximum time in seconds a message can stay in the Queue when `respectTtlEnabled` is `\"true\"`. A message expires when the lesser of the sender assigned time-to-live (TTL) in the message and the `maxTtl` configured for the Queue, is exceeded. A value of 0 disables expiry. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
+				Optional:    true,
+			},
+			"msg_vpn_name": rschema.StringAttribute{
+				Description: "The name of the Message VPN.",
+				Optional:    true,
+			},
+			"owner": rschema.StringAttribute{
+				Description: "The Client Username that owns the Queue and has permission equivalent to `\"delete\"`. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
+				Optional:    true,
+
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(regexp.MustCompile("^[[:print:]]{1,189}$"), "Does not match pattern '^[[:print:]]{1,189}$'"),
+				},
+			},
+			"permission": rschema.StringAttribute{
+				Description: "The permission level for all consumers of the Queue, excluding the owner. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"no-access\"`. The allowed values and their meaning are:  <pre> \"no-access\" - Disallows all access. \"read-only\" - Read-only access to the messages. \"consume\" - Consume (read and remove) messages. \"modify-topic\" - Consume messages or modify the topic/selector. \"delete\" - Consume messages, modify the topic/selector or delete the Client created endpoint altogether. </pre> ",
+				Optional:    true,
+
+				Validators: []validator.String{
+					stringvalidator.OneOf("no-access", "read-only", "consume", "modify-topic", "delete"),
+				},
+			},
+			"queue_name": rschema.StringAttribute{
+				Description: "The name of the Queue.",
+				Optional:    true,
+			},
+			"redelivery_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable message redelivery. When enabled, the number of redelivery attempts is controlled by maxRedeliveryCount. When disabled, the message will never be delivered from the queue more than once. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`. Available since 2.18.",
+				Optional:    true,
+			},
+			"reject_low_priority_msg_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable the checking of low priority messages against the `rejectLowPriorityMsgLimit`. This may only be enabled if `rejectMsgToSenderOnDiscardBehavior` does not have a value of `\"never\"`. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
+				Optional:    true,
+			},
+			"reject_low_priority_msg_limit": rschema.Int64Attribute{
+				Description: "The number of messages of any priority in the Queue above which low priority messages are not admitted but higher priority messages are allowed. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
+				Optional:    true,
+			},
+			"reject_msg_to_sender_on_discard_behavior": rschema.StringAttribute{
+				Description: "Determines when to return negative acknowledgements (NACKs) to sending clients on message discards. Note that NACKs cause the message to not be delivered to any destination and Transacted Session commits to fail. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"when-queue-enabled\"`. The allowed values and their meaning are:  <pre> \"always\" - Always return a negative acknowledgment (NACK) to the sending client on message discard. \"when-queue-enabled\" - Only return a negative acknowledgment (NACK) to the sending client on message discard when the Queue is enabled. \"never\" - Never return a negative acknowledgment (NACK) to the sending client on message discard. </pre>  Available since 2.1.",
+				Optional:    true,
+
+				Validators: []validator.String{
+					stringvalidator.OneOf("always", "when-queue-enabled", "never"),
+				},
+			},
+			"respect_msg_priority_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable the respecting of message priority. When enabled, messages contained in the Queue are delivered in priority order, from 9 (highest) to 0 (lowest). MQTT queues do not support enabling message priority. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.8.",
+				Optional:    true,
+			},
+			"respect_ttl_enabled": rschema.BoolAttribute{
+				Description: "Enable or disable the respecting of the time-to-live (TTL) for messages in the Queue. When enabled, expired messages are discarded or moved to the DMQ. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
+				Optional:    true,
+			},
+		},
+	}
+
+	return schema
 }

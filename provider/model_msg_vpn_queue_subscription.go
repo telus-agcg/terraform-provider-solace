@@ -1,10 +1,9 @@
 package provider
 
 import (
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"telusag/terraform-provider-solace/sempv2"
-
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // MsgVpnQueueSubscription struct for MsgVpnQueueSubscription
@@ -28,31 +27,48 @@ func (tfData *MsgVpnQueueSubscription) ToApi() *sempv2.MsgVpnQueueSubscription {
 	}
 }
 
-// Terraform schema for MsgVpnQueueSubscription
-func MsgVpnQueueSubscriptionSchema(requiredAttributes ...string) tfsdk.Schema {
-	schema := tfsdk.Schema{
+// Terraform DataSource schema for MsgVpnQueueSubscription
+func MsgVpnQueueSubscriptionDataSourceSchema(requiredAttributes ...string) dschema.Schema {
+	schema := dschema.Schema{
 		Description: "MsgVpnQueueSubscription",
-		Attributes: map[string]tfsdk.Attribute{
-			"msg_vpn_name": {
-				Type:        types.StringType,
+		Attributes: map[string]dschema.Attribute{
+			"msg_vpn_name": dschema.StringAttribute{
 				Description: "The name of the Message VPN.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"queue_name": {
-				Type:        types.StringType,
+			"queue_name": dschema.StringAttribute{
 				Description: "The name of the Queue.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
-			"subscription_topic": {
-				Type:        types.StringType,
+			"subscription_topic": dschema.StringAttribute{
 				Description: "The topic of the Subscription.",
 				Optional:    true,
-				Validators:  []tfsdk.AttributeValidator{},
 			},
 		},
 	}
 
-	return WithRequiredAttributes(schema, requiredAttributes)
+	return schema
+}
+
+// Terraform Resource schema for MsgVpnQueueSubscription
+func MsgVpnQueueSubscriptionResourceSchema(requiredAttributes ...string) rschema.Schema {
+	schema := rschema.Schema{
+		Description: "MsgVpnQueueSubscription",
+		Attributes: map[string]rschema.Attribute{
+			"msg_vpn_name": rschema.StringAttribute{
+				Description: "The name of the Message VPN.",
+				Optional:    true,
+			},
+			"queue_name": rschema.StringAttribute{
+				Description: "The name of the Queue.",
+				Optional:    true,
+			},
+			"subscription_topic": rschema.StringAttribute{
+				Description: "The topic of the Subscription.",
+				Optional:    true,
+			},
+		},
+	}
+
+	return schema
 }

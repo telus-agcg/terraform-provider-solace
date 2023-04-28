@@ -67,8 +67,10 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
                 for (CodegenProperty param : Iterables.concat(model.vars, model.allVars, model.requiredVars, model.optionalVars)) {
                     param.vendorExtensions.put("x-go-base-type", param.dataType);
 
-                    if(param.minLength != null || param.maxLength != null || param.allowableValues != null) {
+                    if(param.minLength != null || param.maxLength != null || param.allowableValues != null || param.pattern != null) {
                         imports.add(createMapping("import", "github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"));
+                        imports.add(createMapping("import", "github.com/hashicorp/terraform-plugin-framework/schema/validator"));
+                        param.vendorExtensions.put("hasStringValidators", true);
                     }
 
                     if(param.pattern != null) {
@@ -122,6 +124,12 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
     tfTypeMap.put("int32", "types.Int64Type");
     tfTypeMap.put("int64", "types.Int64Type");
 
+    tfAttributeTypes.clear();
+    tfAttributeTypes.put("string", "StringAttribute");
+    tfAttributeTypes.put("bool", "BoolAttribute");
+    tfAttributeTypes.put("int32", "Int64Attribute");
+    tfAttributeTypes.put("int64", "Int64Attribute");
+
     // set the output folder here
     outputFolder = "generated-code/terraform-provider";
 
@@ -166,17 +174,13 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
      */
     additionalProperties.put("apiVersion", apiVersion);
     additionalProperties.put("tfType", toTerraformTypeLambda);
+    additionalProperties.put("tfAttributeType", toTerraformAttributeTypeLambda);
 
     /**
      * Supporting Files.  You can write single files for the generator with the
      * entire object tree available.  If the input file has a suffix of `.mustache
      * it will be processed by the template engine.  Otherwise, it will be copied
      */
-    supportingFiles.add(new SupportingFile("myFile.mustache",   // the input template or file
-      "",                                                       // the destination folder, relative `outputFolder`
-      "myFile.sample")                                          // the output file
-    );
-
     supportingFiles.add(new SupportingFile("validation.go.mustache", "", "validation.go"));
 
     /**
@@ -198,6 +202,15 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
     @Override
     public void execute(Fragment frag, Writer out) throws IOException {
       out.write(toTerraformType(frag.execute()));
+    }
+  };
+
+  private Map<String, String> tfAttributeTypes = new HashMap<>();
+  private Mustache.Lambda toTerraformAttributeTypeLambda = new Mustache.Lambda() {
+    @Override
+    public void execute(Fragment frag, Writer out) throws IOException {
+      String value = frag.execute();
+      out.write(tfAttributeTypes.getOrDefault(value, "ObjectAttribute"));
     }
   };
 

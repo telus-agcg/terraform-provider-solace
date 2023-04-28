@@ -1,45 +1,43 @@
 package provider
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = clientUsernameResourceType{}
-
-type clientUsernameResourceType struct {
+func NewMsgVpnClientUsernameResource() resource.Resource {
+	return &solaceResource[MsgVpnClientUsername]{spr: &clientUsernameResource{}}
 }
 
-func (t clientUsernameResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpnClientUsername](
-		clientUsernameResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t clientUsernameResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	schema := MsgVpnClientUsernameSchema("msg_vpn_name", "client_username")
-
-	// Mark the password as sensitive
-	passwordAttribute := schema.Attributes["password"]
-	passwordAttribute.Sensitive = true
-	schema.Attributes["password"] = passwordAttribute
-
-	return schema, nil
-}
-
-var _ solaceProviderResource[MsgVpnClientUsername] = clientUsernameResource{}
+var _ solaceProviderResource[MsgVpnClientUsername] = &clientUsernameResource{}
 
 type clientUsernameResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r clientUsernameResource) Name() string {
+	return "clientusername"
+}
+
+func (r clientUsernameResource) Schema() schema.Schema {
+	s := MsgVpnClientUsernameResourceSchema("msg_vpn_name", "client_username")
+
+	// Mark the password as sensitive
+	passwordAttribute := s.Attributes["password"].(schema.StringAttribute)
+	passwordAttribute.Sensitive = true
+	s.Attributes["password"] = passwordAttribute
+
+	return s
+}
+
+func (r *clientUsernameResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r clientUsernameResource) NewData() *MsgVpnClientUsername {

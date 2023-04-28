@@ -3,9 +3,8 @@ package {{packageName}}
 {{#models}}
 import (
 	"telusag/terraform-provider-solace/sempv2"
-	
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 {{#imports}}
     "{{import}}"
 {{/imports}}

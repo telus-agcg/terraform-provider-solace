@@ -7,11 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var EventThresholdByValueType attr.Type = types.ObjectType{
-	AttrTypes: map[string]attr.Type{
-		"clear_value": types.Int64Type,
-		"set_value":   types.Int64Type,
-	},
+var EventThresholdByValueAttributeTypes map[string]attr.Type = map[string]attr.Type{
+	"clear_value": types.Int64Type,
+	"set_value":   types.Int64Type,
 }
 
 type EventThresholdByValue struct {

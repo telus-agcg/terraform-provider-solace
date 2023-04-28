@@ -10,7 +10,8 @@ terraform {
 }
 
 provider "solace" {
-  hostname = "solace:8080"
+  scheme   = "http"
+  hostname = "localhost:8080"
   username = "admin"
   password = "admin"
   // default_msgvpn = "bar"

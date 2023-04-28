@@ -1,36 +1,34 @@
 package provider
 
 import (
-	"context"
 	"net/http"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = msgVpnResourceType{}
-
-type msgVpnResourceType struct {
+func NewMsgVpnResource() resource.Resource {
+	return &solaceResource[MsgVpn]{spr: &msgVpnResource{}}
 }
 
-func (t msgVpnResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpn](
-		msgVpnResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t msgVpnResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnSchema("msg_vpn_name"), nil
-}
-
-var _ solaceProviderResource[MsgVpn] = msgVpnResource{}
+var _ solaceProviderResource[MsgVpn] = &msgVpnResource{}
 
 type msgVpnResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r msgVpnResource) Name() string {
+	return "msgvpn"
+}
+
+func (r msgVpnResource) Schema() schema.Schema {
+	return MsgVpnResourceSchema("msg_vpn_name")
+}
+
+func (r *msgVpnResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r msgVpnResource) NewData() *MsgVpn {

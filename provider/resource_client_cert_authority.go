@@ -1,36 +1,34 @@
 package provider
 
 import (
-	"context"
 	"net/http"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = clientCertAuthorityResourceType{}
-
-type clientCertAuthorityResourceType struct {
+func NewClientCertAuthorityResource() resource.Resource {
+	return &solaceResource[ClientCertAuthority]{spr: &clientCertAuthorityResource{}}
 }
 
-func (t clientCertAuthorityResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[ClientCertAuthority](
-		clientCertAuthorityResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t clientCertAuthorityResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return ClientCertAuthoritySchema("cert_authority_name"), nil
-}
-
-var _ solaceProviderResource[ClientCertAuthority] = clientCertAuthorityResource{}
+var _ solaceProviderResource[ClientCertAuthority] = &clientCertAuthorityResource{}
 
 type clientCertAuthorityResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r clientCertAuthorityResource) Name() string {
+	return "client_cert_authority"
+}
+
+func (r clientCertAuthorityResource) Schema() schema.Schema {
+	return ClientCertAuthorityResourceSchema("cert_authority_name")
+}
+
+func (r *clientCertAuthorityResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r clientCertAuthorityResource) NewData() *ClientCertAuthority {

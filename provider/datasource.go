@@ -5,10 +5,20 @@ import (
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
 type solaceProviderDataSource[Tdat any] interface {
+	// The name of this datasource, without the provider_ prefix
+	Name() string
+
+	// The schema for this datasource
+	Schema() schema.Schema
+
+	// To inject the provider, which holds the SEMPv2 client
+	SetProvider(solaceProvider)
+
 	// NewData returns a new data struct for the datasource. This struct
 	// needs to have `tfsdk:` tags for Terraform to reflect the config
 	// into it.
@@ -18,17 +28,13 @@ type solaceProviderDataSource[Tdat any] interface {
 	Read(*Tdat, *diag.Diagnostics) (*http.Response, error)
 }
 
-var _ datasource.DataSource = dataSource[struct{}]{}
+var _ datasource.DataSourceWithConfigure = &dataSource[struct{}]{}
 
 type dataSource[Tdat any] struct {
 	spds solaceProviderDataSource[Tdat]
 }
 
-func NewDataSource[Tdat any](spds solaceProviderDataSource[Tdat]) *dataSource[Tdat] {
-	return &dataSource[Tdat]{spds: spds}
-}
-
-func (r dataSource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter, diag *diag.Diagnostics) *Tdat {
+func (r *dataSource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter, diag *diag.Diagnostics) *Tdat {
 	data := r.spds.NewData()
 	diags := config.Get(ctx, data)
 	diag.Append(diags...)
@@ -36,12 +42,24 @@ func (r dataSource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter
 	return data
 }
 
-func (r dataSource[Tdat]) DataToCtx(ctx context.Context, data *Tdat, config TFConfigSetter, diag *diag.Diagnostics) {
+func (r *dataSource[Tdat]) DataToCtx(ctx context.Context, data *Tdat, config TFConfigSetter, diag *diag.Diagnostics) {
 	diags := config.Set(ctx, data)
 	diag.Append(diags...)
 }
 
-func (ds dataSource[Tdat]) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+func (ds *dataSource[Tdat]) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = "solace_" + ds.spds.Name()
+}
+
+func (ds *dataSource[Tdat]) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = ds.spds.Schema()
+}
+
+func (r *dataSource[Tdat]) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	r.spds.SetProvider(req.ProviderData.(solaceProvider))
+}
+
+func (ds *dataSource[Tdat]) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	data := ds.DataFromCtx(ctx, &req.Config, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {

@@ -1,37 +1,35 @@
 package provider
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = aclProfileResourceType{}
-
-type aclProfileResourceType struct {
+func NewMsgVpnAclProfileResource() resource.Resource {
+	return &solaceResource[MsgVpnAclProfile]{spr: &aclProfileResource{}}
 }
 
-func (t aclProfileResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpnAclProfile](
-		aclProfileResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t aclProfileResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnAclProfileSchema("msg_vpn_name", "acl_profile_name"), nil
-}
-
-var _ solaceProviderResource[MsgVpnAclProfile] = aclProfileResource{}
+var _ solaceProviderResource[MsgVpnAclProfile] = &aclProfileResource{}
 
 type aclProfileResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r aclProfileResource) Name() string {
+	return "aclprofile"
+}
+
+func (r aclProfileResource) Schema() schema.Schema {
+	return MsgVpnAclProfileResourceSchema("msg_vpn_name", "acl_profile_name")
+}
+
+func (r *aclProfileResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r aclProfileResource) NewData() *MsgVpnAclProfile {

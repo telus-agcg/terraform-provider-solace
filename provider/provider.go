@@ -10,15 +10,18 @@ import (
 
 	rt "github.com/go-openapi/runtime/client"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
+var _ provider.Provider = &solaceProvider{}
+
 type solaceProvider struct {
-	configured bool
-	version    string
+	version string
 
 	Client  sempv2.APIClient
 	Context context.Context
@@ -30,6 +33,11 @@ type providerData struct {
 	Scheme   *string `tfsdk:"scheme"   env:"SEMP_SCHEME"`
 	Hostname *string `tfsdk:"hostname" env:"SEMP_HOSTNAME"`
 	Insecure *bool   `tfsdk:"insecure" env:"SEMP_INSECURE"`
+}
+
+func (p *solaceProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "solace"
+	resp.Version = p.version
 }
 
 func (p *solaceProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
@@ -85,7 +93,8 @@ func (p *solaceProvider) Configure(ctx context.Context, req provider.ConfigureRe
 
 	p.Client = *sempv2.NewAPIClient(config)
 
-	p.configured = true
+	resp.DataSourceData = p
+	resp.ResourceData = p
 }
 
 // configureFromEnvironment read values from the environment variables configured in the struct tags and sets them in `data` if provided
@@ -164,62 +173,57 @@ func configureFromTerraformConfig(ctx context.Context, req provider.ConfigureReq
 	return
 }
 
-func (p *solaceProvider) GetResources(ctx context.Context) (map[string]provider.ResourceType, diag.Diagnostics) {
-	return map[string]provider.ResourceType{
-		"solace_msgvpn":                              msgVpnResourceType{},
-		"solace_oauthprofile":                        oauthProfileResourceType{},
-		"solace_aclprofile":                          aclProfileResourceType{},
-		"solace_aclprofile_client_connect_exception": aclProfileClientConnectExceptionResourceType{},
-		"solace_aclprofile_publish_exception":        aclProfilePublishExceptionResourceType{},
-		"solace_aclprofile_subscribe_exception":      aclProfileSubscribeExceptionResourceType{},
-		"solace_clientprofile":                       clientProfileResourceType{},
-		"solace_clientusername":                      clientUsernameResourceType{},
-		"solace_queue":                               queueResourceType{},
-		"solace_queue_subscription":                  queueSubscriptionResourceType{},
-		"solace_client_cert_authority":               clientCertAuthorityResourceType{},
-	}, nil
+func (p *solaceProvider) Resources(ctx context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		NewClientCertAuthorityResource,
+		NewMsgVpnResource,
+		NewMsgVpnAclProfileClientConnectExceptionResource,
+		NewMsgVpnAclProfilePublishExceptionResource,
+		NewMsgVpnAclProfileSubscribeExceptionResource,
+		NewMsgVpnAclProfileResource,
+		NewMsgVpnAuthenticationOauthProfileResource,
+		NewMsgVpnClientProfileResource,
+		NewMsgVpnClientUsernameResource,
+		NewMsgVpnQueueSubscriptionResource,
+		NewMsgVpnQueueResource,
+	}
 }
 
-func (p *solaceProvider) GetDataSources(ctx context.Context) (map[string]provider.DataSourceType, diag.Diagnostics) {
-	return map[string]provider.DataSourceType{
-		"solace_msgvpn": msgVpnDataSourceType{},
-	}, nil
+func (p *solaceProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		NewMsgVpnDataSource,
+	}
 }
 
-func (p *solaceProvider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"username": {
-				Type:        types.StringType,
+func (p *solaceProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"username": schema.StringAttribute{
 				Optional:    true,
 				Description: "Solace user with admin access (env: SEMP_USERNAME)",
 			},
-			"password": {
-				Type:        types.StringType,
+			"password": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
 				Description: "Password (env: SEMP_PASSWORD)",
 			},
-			"scheme": {
-				Type:        types.StringType,
+			"scheme": schema.StringAttribute{
 				Optional:    true,
 				Description: "URL scheme to use: http or https (env: SEMP_SCHEME)",
-				Validators: []tfsdk.AttributeValidator{
+				Validators: []validator.String{
 					stringvalidator.OneOf("http", "https"),
 				},
 			},
-			"hostname": {
-				Type:        types.StringType,
+			"hostname": schema.StringAttribute{
 				Optional:    true,
 				Description: "Hostname for the Solace Event Broker (env: SEMP_HOSTNAME)",
 			},
-			"insecure": {
-				Type:        types.BoolType,
+			"insecure": schema.BoolAttribute{
 				Optional:    true,
 				Description: "Ignore HTTPS certificate errors (env: SEMP_INSECURE)",
 			},
 		},
-	}, nil
+	}
 }
 
 func New(version string) func() provider.Provider {
@@ -228,33 +232,4 @@ func New(version string) func() provider.Provider {
 			version: version,
 		}
 	}
-}
-
-// convertProviderType is a helper function for NewResource and NewDataSource
-// implementations to associate the concrete provider type. Alternatively,
-// this helper can be skipped and the provider type can be directly type
-// asserted (e.g. provider: in.(*provider)), however using this can prevent
-// potential panics.
-func convertProviderType(in provider.Provider) (solaceProvider, diag.Diagnostics) {
-	var diags diag.Diagnostics
-
-	p, ok := in.(*solaceProvider)
-
-	if !ok {
-		diags.AddError(
-			"Unexpected Provider Instance Type",
-			fmt.Sprintf("While creating the data source or resource, an unexpected provider type (%T) was received. This is always a bug in the provider code and should be reported to the provider developers.", p),
-		)
-		return solaceProvider{}, diags
-	}
-
-	if p == nil {
-		diags.AddError(
-			"Unexpected Provider Instance Type",
-			"While creating the data source or resource, an unexpected empty provider instance was received. This is always a bug in the provider code and should be reported to the provider developers.",
-		)
-		return solaceProvider{}, diags
-	}
-
-	return *p, diags
 }

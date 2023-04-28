@@ -1,36 +1,34 @@
 package provider
 
 import (
-	"context"
 	"net/http"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = aclProfileResourceType{}
-
-type aclProfileClientConnectExceptionResourceType struct {
+func NewMsgVpnAclProfileClientConnectExceptionResource() resource.Resource {
+	return &solaceResource[MsgVpnAclProfileClientConnectException]{spr: &aclProfileClientConnectExceptionResource{}}
 }
 
-func (t aclProfileClientConnectExceptionResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpnAclProfileClientConnectException](
-		aclProfileClientConnectExceptionResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t aclProfileClientConnectExceptionResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnAclProfileClientConnectExceptionSchema("msg_vpn_name", "acl_profile_name", "client_connect_exception_address"), nil
-}
-
-var _ solaceProviderResource[MsgVpnAclProfile] = aclProfileResource{}
+var _ solaceProviderResource[MsgVpnAclProfileClientConnectException] = &aclProfileClientConnectExceptionResource{}
 
 type aclProfileClientConnectExceptionResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r aclProfileClientConnectExceptionResource) Name() string {
+	return "aclprofile_client_connect_exception"
+}
+
+func (r aclProfileClientConnectExceptionResource) Schema() schema.Schema {
+	return MsgVpnAclProfileClientConnectExceptionResourceSchema("msg_vpn_name", "acl_profile_name", "client_connect_exception_address")
+}
+
+func (r *aclProfileClientConnectExceptionResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r aclProfileClientConnectExceptionResource) NewData() *MsgVpnAclProfileClientConnectException {

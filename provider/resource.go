@@ -6,9 +6,19 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
 type solaceProviderResource[Tdat any] interface {
+	// The name of this resource, without the provider_ prefix
+	Name() string
+
+	// The schema for this resource
+	Schema() schema.Schema
+
+	// To inject the provider, which holds the SEMPv2 client
+	SetProvider(*solaceProvider)
+
 	// NewData returns a new data struct for the resource. This struct
 	// needs to have `tfsdk:` tags for Terraform to reflect the config
 	// into it.
@@ -30,17 +40,13 @@ type solaceProviderResource[Tdat any] interface {
 	Import(string, *Tdat, *diag.Diagnostics)
 }
 
-var _ resource.Resource = solaceResource[struct{}]{}
+var _ resource.ResourceWithConfigure = &solaceResource[struct{}]{}
 
 type solaceResource[Tdat any] struct {
 	spr solaceProviderResource[Tdat]
 }
 
-func NewResource[Tdat any](spr solaceProviderResource[Tdat]) *solaceResource[Tdat] {
-	return &solaceResource[Tdat]{spr: spr}
-}
-
-func (r solaceResource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter, diag *diag.Diagnostics) *Tdat {
+func (r *solaceResource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGetter, diag *diag.Diagnostics) *Tdat {
 	data := r.spr.NewData()
 	diags := config.Get(ctx, data)
 	diag.Append(diags...)
@@ -48,12 +54,26 @@ func (r solaceResource[Tdat]) DataFromCtx(ctx context.Context, config TFConfigGe
 	return data
 }
 
-func (r solaceResource[Tdat]) DataToCtx(ctx context.Context, data *Tdat, config TFConfigSetter, diag *diag.Diagnostics) {
+func (r *solaceResource[Tdat]) DataToCtx(ctx context.Context, data *Tdat, config TFConfigSetter, diag *diag.Diagnostics) {
 	diags := config.Set(ctx, data)
 	diag.Append(diags...)
 }
 
-func (r solaceResource[Tdat]) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *solaceResource[Tdat]) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = "solace_" + r.spr.Name()
+}
+
+func (r *solaceResource[Tdat]) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = r.spr.Schema()
+}
+
+func (r *solaceResource[Tdat]) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if provider, ok := req.ProviderData.(*solaceProvider); ok {
+		r.spr.SetProvider(provider)
+	}
+}
+
+func (r *solaceResource[Tdat]) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	data := r.DataFromCtx(ctx, &req.Plan, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {
@@ -67,7 +87,7 @@ func (r solaceResource[Tdat]) Create(ctx context.Context, req resource.CreateReq
 	}
 }
 
-func (r solaceResource[Tdat]) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *solaceResource[Tdat]) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	data := r.DataFromCtx(ctx, &req.State, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {
@@ -84,7 +104,7 @@ func (r solaceResource[Tdat]) Read(ctx context.Context, req resource.ReadRequest
 
 }
 
-func (r solaceResource[Tdat]) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *solaceResource[Tdat]) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	curState := r.DataFromCtx(ctx, &req.State, &resp.Diagnostics)
 	plnState := r.DataFromCtx(ctx, &req.Plan, &resp.Diagnostics)
 
@@ -100,7 +120,7 @@ func (r solaceResource[Tdat]) Update(ctx context.Context, req resource.UpdateReq
 	}
 }
 
-func (r solaceResource[Tdat]) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *solaceResource[Tdat]) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	data := r.DataFromCtx(ctx, &req.State, &resp.Diagnostics)
 
 	if resp.Diagnostics.HasError() {
@@ -114,7 +134,7 @@ func (r solaceResource[Tdat]) Delete(ctx context.Context, req resource.DeleteReq
 	}
 }
 
-func (r solaceResource[Tdat]) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *solaceResource[Tdat]) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	data := r.spr.NewData()
 	r.spr.Import(req.ID, data, &resp.Diagnostics)
 

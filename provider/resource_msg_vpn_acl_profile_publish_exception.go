@@ -1,36 +1,34 @@
 package provider
 
 import (
-	"context"
 	"net/http"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = aclProfileResourceType{}
-
-type aclProfilePublishExceptionResourceType struct {
+func NewMsgVpnAclProfilePublishExceptionResource() resource.Resource {
+	return &solaceResource[MsgVpnAclProfilePublishException]{spr: &aclProfilePublishExceptionResource{}}
 }
 
-func (t aclProfilePublishExceptionResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpnAclProfilePublishException](
-		aclProfilePublishExceptionResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t aclProfilePublishExceptionResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnAclProfilePublishExceptionSchema("msg_vpn_name", "acl_profile_name", "topic_syntax", "publish_exception_topic"), nil
-}
-
-var _ solaceProviderResource[MsgVpnAclProfile] = aclProfileResource{}
+var _ solaceProviderResource[MsgVpnAclProfilePublishException] = &aclProfilePublishExceptionResource{}
 
 type aclProfilePublishExceptionResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r aclProfilePublishExceptionResource) Name() string {
+	return "aclprofile_publish_exception"
+}
+
+func (r aclProfilePublishExceptionResource) Schema() schema.Schema {
+	return MsgVpnAclProfilePublishExceptionResourceSchema("msg_vpn_name", "acl_profile_name", "topic_syntax", "publish_exception_topic")
+}
+
+func (r *aclProfilePublishExceptionResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r aclProfilePublishExceptionResource) NewData() *MsgVpnAclProfilePublishException {

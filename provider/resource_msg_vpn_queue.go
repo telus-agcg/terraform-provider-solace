@@ -1,42 +1,40 @@
 package provider
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 	"telusag/terraform-provider-solace/sempv2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = queueResourceType{}
-
-type queueResourceType struct {
+func NewMsgVpnQueueResource() resource.Resource {
+	return &solaceResource[MsgVpnQueue]{spr: &queueResource{}}
 }
 
-func (t queueResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpnQueue](
-		queueResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t queueResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnQueueSchema("msg_vpn_name", "queue_name"), nil
-}
-
-var _ solaceProviderResource[MsgVpnQueue] = queueResource{}
+var _ solaceProviderResource[MsgVpnQueue] = &queueResource{}
 
 type queueResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+func (r queueResource) Name() string {
+	return "queue"
+}
+
+func (r queueResource) Schema() schema.Schema {
+	return MsgVpnQueueResourceSchema("msg_vpn_name", "queue_name")
 }
 
 func (r queueResource) NewData() *MsgVpnQueue {
 	return &MsgVpnQueue{}
+}
+
+func (r *queueResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r queueResource) Create(data *MsgVpnQueue, diag *diag.Diagnostics) (*http.Response, error) {

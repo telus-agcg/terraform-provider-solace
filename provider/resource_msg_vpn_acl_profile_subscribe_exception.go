@@ -1,36 +1,34 @@
 package provider
 
 import (
-	"context"
 	"net/http"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var _ provider.ResourceType = aclProfileResourceType{}
-
-type aclProfileSubscribeExceptionResourceType struct {
+func NewMsgVpnAclProfileSubscribeExceptionResource() resource.Resource {
+	return &solaceResource[MsgVpnAclProfileSubscribeException]{spr: &aclProfileSubscribeExceptionResource{}}
 }
-
-func (t aclProfileSubscribeExceptionResourceType) NewResource(ctx context.Context, in provider.Provider) (resource.Resource, diag.Diagnostics) {
-	solaceProvider, diags := convertProviderType(in)
-
-	return NewResource[MsgVpnAclProfileSubscribeException](
-		aclProfileSubscribeExceptionResource{solaceProvider: solaceProvider}), diags
-}
-
-func (t aclProfileSubscribeExceptionResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return MsgVpnAclProfileSubscribeExceptionSchema("msg_vpn_name", "acl_profile_name", "topic_syntax", "subscribe_exception_topic"), nil
-}
-
-var _ solaceProviderResource[MsgVpnAclProfile] = aclProfileResource{}
 
 type aclProfileSubscribeExceptionResource struct {
-	solaceProvider
+	*solaceProvider
+}
+
+var _ solaceProviderResource[MsgVpnAclProfileSubscribeException] = &aclProfileSubscribeExceptionResource{}
+
+func (r aclProfileSubscribeExceptionResource) Name() string {
+	return "aclprofile_subscribe_exception"
+}
+
+func (r aclProfileSubscribeExceptionResource) Schema() schema.Schema {
+	return MsgVpnAclProfileSubscribeExceptionResourceSchema("msg_vpn_name", "acl_profile_name", "topic_syntax", "subscribe_exception_topic")
+}
+
+func (r *aclProfileSubscribeExceptionResource) SetProvider(provider *solaceProvider) {
+	r.solaceProvider = provider
 }
 
 func (r aclProfileSubscribeExceptionResource) NewData() *MsgVpnAclProfileSubscribeException {
