@@ -23,7 +23,15 @@ func (r msgVpnDataSource) Name() string {
 }
 
 func (r msgVpnDataSource) Schema() schema.Schema {
-	return MsgVpnDataSourceSchema("msg_vpn_name")
+	return schema.Schema{
+		Description: "MsgVpn",
+		Attributes: map[string]schema.Attribute{
+			"msg_vpn_name": schema.StringAttribute{
+				Description: "The name of the Message VPN.",
+				Required:    true,
+			},
+		},
+	}
 }
 
 func (r *msgVpnDataSource) SetProvider(provider solaceProvider) {

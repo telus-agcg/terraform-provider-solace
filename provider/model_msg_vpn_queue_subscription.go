@@ -1,9 +1,9 @@
 package provider
 
 import (
-	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"telusag/terraform-provider-solace/sempv2"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
 // MsgVpnQueueSubscription struct for MsgVpnQueueSubscription
@@ -27,45 +27,31 @@ func (tfData *MsgVpnQueueSubscription) ToApi() *sempv2.MsgVpnQueueSubscription {
 	}
 }
 
-// Terraform DataSource schema for MsgVpnQueueSubscription
-func MsgVpnQueueSubscriptionDataSourceSchema(requiredAttributes ...string) dschema.Schema {
-	schema := dschema.Schema{
-		Description: "MsgVpnQueueSubscription",
-		Attributes: map[string]dschema.Attribute{
-			"msg_vpn_name": dschema.StringAttribute{
-				Description: "The name of the Message VPN.",
-				Optional:    true,
-			},
-			"queue_name": dschema.StringAttribute{
-				Description: "The name of the Queue.",
-				Optional:    true,
-			},
-			"subscription_topic": dschema.StringAttribute{
-				Description: "The topic of the Subscription.",
-				Optional:    true,
-			},
-		},
-	}
-
-	return schema
-}
-
 // Terraform Resource schema for MsgVpnQueueSubscription
-func MsgVpnQueueSubscriptionResourceSchema(requiredAttributes ...string) rschema.Schema {
-	schema := rschema.Schema{
+func MsgVpnQueueSubscriptionResourceSchema(requiredAttributes ...string) schema.Schema {
+	schema := schema.Schema{
 		Description: "MsgVpnQueueSubscription",
-		Attributes: map[string]rschema.Attribute{
-			"msg_vpn_name": rschema.StringAttribute{
+		Attributes: map[string]schema.Attribute{
+			"msg_vpn_name": schema.StringAttribute{
 				Description: "The name of the Message VPN.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "msg_vpn_name"),
+				Optional:    !contains(requiredAttributes, "msg_vpn_name"),
+
+				PlanModifiers: StringPlanModifiersFor("msg_vpn_name", requiredAttributes),
 			},
-			"queue_name": rschema.StringAttribute{
+			"queue_name": schema.StringAttribute{
 				Description: "The name of the Queue.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_name"),
+				Optional:    !contains(requiredAttributes, "queue_name"),
+
+				PlanModifiers: StringPlanModifiersFor("queue_name", requiredAttributes),
 			},
-			"subscription_topic": rschema.StringAttribute{
+			"subscription_topic": schema.StringAttribute{
 				Description: "The topic of the Subscription.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "subscription_topic"),
+				Optional:    !contains(requiredAttributes, "subscription_topic"),
+
+				PlanModifiers: StringPlanModifiersFor("subscription_topic", requiredAttributes),
 			},
 		},
 	}

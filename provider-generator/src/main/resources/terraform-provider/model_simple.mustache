@@ -32,60 +32,19 @@ func (tfData *{{classname}}) ToApi() *sempv2.{{classname}} {
 	}
 }
 
-// Terraform DataSource schema for {{classname}}
-func {{classname}}DataSourceSchema(requiredAttributes ...string) dschema.Schema {
-	schema := dschema.Schema{
-		Description: "{{{description}}}{{^description}}{{classname}}{{/description}}",
-		Attributes: map[string]dschema.Attribute{
-			{{#vars}}
-			"{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}": dschema.{{#tfAttributeType}}{{dataType}}{{/tfAttributeType}}{
-				Description: "{{{description}}}",
-				{{#required}}
-				Required:    true,
-				{{/required}}
-				{{^required}}
-				Optional:    true,
-				{{/required}}
-				{{^isString}}{{^isNumeric}}{{^isBoolean}}AttributeTypes: {{dataType}}AttributeTypes,{{/isBoolean}}{{/isNumeric}}{{/isString}}
-				{{#vendorExtensions.hasStringValidators}}
-				Validators: []validator.String{
-				{{#minLength}}
-					stringvalidator.LengthAtLeast({{minLength}}),
-				{{/minLength}}
-				{{#maxLength}}
-					stringvalidator.LengthAtMost({{maxLength}}),
-				{{/maxLength}}
-				{{#pattern}}
-					stringvalidator.RegexMatches(regexp.MustCompile("{{pattern}}"), "Does not match pattern '{{pattern}}'"),
-				{{/pattern}}
-				{{#allowableValues}}
-					stringvalidator.OneOf({{#enumVars}}{{^-first}},{{/-first}}{{{value}}}{{/enumVars}}),
-				{{/allowableValues}}
-				},
-				{{/vendorExtensions.hasStringValidators}}
-			},
-			{{/vars}}
-		},
-	}
-
-	return schema
-}
-
 // Terraform Resource schema for {{classname}}
-func {{classname}}ResourceSchema(requiredAttributes ...string) rschema.Schema {
-	schema := rschema.Schema{
+func {{classname}}ResourceSchema(requiredAttributes ...string) schema.Schema {
+	schema := schema.Schema{
 		Description: "{{{description}}}{{^description}}{{classname}}{{/description}}",
-		Attributes: map[string]rschema.Attribute{
+		Attributes: map[string]schema.Attribute{
 			{{#vars}}
-			"{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}": rschema.{{#tfAttributeType}}{{dataType}}{{/tfAttributeType}}{
+			"{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}": schema.{{#tfAttributeType}}{{dataType}}{{/tfAttributeType}}{
 				Description: "{{{description}}}",
-				{{#required}}
-				Required:    true,
-				{{/required}}
-				{{^required}}
-				Optional:    true,
-				{{/required}}
-				{{^isString}}{{^isNumeric}}{{^isBoolean}}AttributeTypes: {{dataType}}AttributeTypes,{{/isBoolean}}{{/isNumeric}}{{/isString}}
+				Required: contains(requiredAttributes, "{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}"),
+				Optional: !contains(requiredAttributes, "{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}"),
+				{{^isString}}{{^isNumeric}}{{^isBoolean}}
+				AttributeTypes: {{dataType}}AttributeTypes,
+				{{/isBoolean}}{{/isNumeric}}{{/isString}}
 				{{#vendorExtensions.hasStringValidators}}
 				Validators: []validator.String{
 				{{#minLength}}
@@ -102,6 +61,9 @@ func {{classname}}ResourceSchema(requiredAttributes ...string) rschema.Schema {
 				{{/allowableValues}}
 				},
 				{{/vendorExtensions.hasStringValidators}}
+				{{#isString}}
+				PlanModifiers: StringPlanModifiersFor("{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}", requiredAttributes),
+				{{/isString}}
 			},
 			{{/vars}}
 		},

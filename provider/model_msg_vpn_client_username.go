@@ -1,12 +1,12 @@
 package provider
 
 import (
+	"telusag/terraform-provider-solace/sempv2"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"regexp"
-	"telusag/terraform-provider-solace/sempv2"
 )
 
 // MsgVpnClientUsername struct for MsgVpnClientUsername
@@ -45,103 +45,67 @@ func (tfData *MsgVpnClientUsername) ToApi() *sempv2.MsgVpnClientUsername {
 	}
 }
 
-// Terraform DataSource schema for MsgVpnClientUsername
-func MsgVpnClientUsernameDataSourceSchema(requiredAttributes ...string) dschema.Schema {
-	schema := dschema.Schema{
-		Description: "MsgVpnClientUsername",
-		Attributes: map[string]dschema.Attribute{
-			"acl_profile_name": dschema.StringAttribute{
-				Description: "The ACL Profile of the Client Username. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
-				Optional:    true,
-
-				Validators: []validator.String{
-					stringvalidator.LengthAtLeast(1),
-					stringvalidator.LengthAtMost(32),
-				},
-			},
-			"client_profile_name": dschema.StringAttribute{
-				Description: "The Client Profile of the Client Username. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
-				Optional:    true,
-			},
-			"client_username": dschema.StringAttribute{
-				Description: "The name of the Client Username.",
-				Optional:    true,
-
-				Validators: []validator.String{
-					stringvalidator.RegexMatches(regexp.MustCompile("^[[:print:]]{1,189}$"), "Does not match pattern '^[[:print:]]{1,189}$'"),
-				},
-			},
-			"enabled": dschema.BoolAttribute{
-				Description: "Enable or disable the Client Username. When disabled, all clients currently connected as the Client Username are disconnected. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"guaranteed_endpoint_permission_override_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable guaranteed endpoint permission override for the Client Username. When enabled all guaranteed endpoints may be accessed, modified or deleted with the same permission as the owner. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"msg_vpn_name": dschema.StringAttribute{
-				Description: "The name of the Message VPN.",
-				Optional:    true,
-			},
-			"password": dschema.StringAttribute{
-				Description: "The password for the Client Username. This attribute is absent from a GET and not updated when absent in a PUT, subject to the exceptions in note 4. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"subscription_manager_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable the subscription management capability of the Client Username. This is the ability to manage subscriptions on behalf of other Client Usernames. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-		},
-	}
-
-	return schema
-}
-
 // Terraform Resource schema for MsgVpnClientUsername
-func MsgVpnClientUsernameResourceSchema(requiredAttributes ...string) rschema.Schema {
-	schema := rschema.Schema{
+func MsgVpnClientUsernameResourceSchema(requiredAttributes ...string) schema.Schema {
+	schema := schema.Schema{
 		Description: "MsgVpnClientUsername",
-		Attributes: map[string]rschema.Attribute{
-			"acl_profile_name": rschema.StringAttribute{
+		Attributes: map[string]schema.Attribute{
+			"acl_profile_name": schema.StringAttribute{
 				Description: "The ACL Profile of the Client Username. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "acl_profile_name"),
+				Optional:    !contains(requiredAttributes, "acl_profile_name"),
 
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.LengthAtMost(32),
 				},
+				PlanModifiers: StringPlanModifiersFor("acl_profile_name", requiredAttributes),
 			},
-			"client_profile_name": rschema.StringAttribute{
+			"client_profile_name": schema.StringAttribute{
 				Description: "The Client Profile of the Client Username. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"default\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_profile_name"),
+				Optional:    !contains(requiredAttributes, "client_profile_name"),
+
+				PlanModifiers: StringPlanModifiersFor("client_profile_name", requiredAttributes),
 			},
-			"client_username": rschema.StringAttribute{
+			"client_username": schema.StringAttribute{
 				Description: "The name of the Client Username.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_username"),
+				Optional:    !contains(requiredAttributes, "client_username"),
 
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile("^[[:print:]]{1,189}$"), "Does not match pattern '^[[:print:]]{1,189}$'"),
 				},
+				PlanModifiers: StringPlanModifiersFor("client_username", requiredAttributes),
 			},
-			"enabled": rschema.BoolAttribute{
+			"enabled": schema.BoolAttribute{
 				Description: "Enable or disable the Client Username. When disabled, all clients currently connected as the Client Username are disconnected. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "enabled"),
+				Optional:    !contains(requiredAttributes, "enabled"),
 			},
-			"guaranteed_endpoint_permission_override_enabled": rschema.BoolAttribute{
+			"guaranteed_endpoint_permission_override_enabled": schema.BoolAttribute{
 				Description: "Enable or disable guaranteed endpoint permission override for the Client Username. When enabled all guaranteed endpoints may be accessed, modified or deleted with the same permission as the owner. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "guaranteed_endpoint_permission_override_enabled"),
+				Optional:    !contains(requiredAttributes, "guaranteed_endpoint_permission_override_enabled"),
 			},
-			"msg_vpn_name": rschema.StringAttribute{
+			"msg_vpn_name": schema.StringAttribute{
 				Description: "The name of the Message VPN.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "msg_vpn_name"),
+				Optional:    !contains(requiredAttributes, "msg_vpn_name"),
+
+				PlanModifiers: StringPlanModifiersFor("msg_vpn_name", requiredAttributes),
 			},
-			"password": rschema.StringAttribute{
+			"password": schema.StringAttribute{
 				Description: "The password for the Client Username. This attribute is absent from a GET and not updated when absent in a PUT, subject to the exceptions in note 4. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "password"),
+				Optional:    !contains(requiredAttributes, "password"),
+
+				PlanModifiers: StringPlanModifiersFor("password", requiredAttributes),
 			},
-			"subscription_manager_enabled": rschema.BoolAttribute{
+			"subscription_manager_enabled": schema.BoolAttribute{
 				Description: "Enable or disable the subscription management capability of the Client Username. This is the ability to manage subscriptions on behalf of other Client Usernames. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "subscription_manager_enabled"),
+				Optional:    !contains(requiredAttributes, "subscription_manager_enabled"),
 			},
 		},
 	}

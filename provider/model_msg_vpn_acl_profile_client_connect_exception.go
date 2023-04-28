@@ -1,11 +1,11 @@
 package provider
 
 import (
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"telusag/terraform-provider-solace/sempv2"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 // MsgVpnAclProfileClientConnectException struct for MsgVpnAclProfileClientConnectException
@@ -29,55 +29,35 @@ func (tfData *MsgVpnAclProfileClientConnectException) ToApi() *sempv2.MsgVpnAclP
 	}
 }
 
-// Terraform DataSource schema for MsgVpnAclProfileClientConnectException
-func MsgVpnAclProfileClientConnectExceptionDataSourceSchema(requiredAttributes ...string) dschema.Schema {
-	schema := dschema.Schema{
-		Description: "MsgVpnAclProfileClientConnectException",
-		Attributes: map[string]dschema.Attribute{
-			"acl_profile_name": dschema.StringAttribute{
-				Description: "The name of the ACL Profile.",
-				Optional:    true,
-
-				Validators: []validator.String{
-					stringvalidator.LengthAtLeast(1),
-					stringvalidator.LengthAtMost(32),
-				},
-			},
-			"client_connect_exception_address": dschema.StringAttribute{
-				Description: "The IP address/netmask of the client connect exception in CIDR form.",
-				Optional:    true,
-			},
-			"msg_vpn_name": dschema.StringAttribute{
-				Description: "The name of the Message VPN.",
-				Optional:    true,
-			},
-		},
-	}
-
-	return schema
-}
-
 // Terraform Resource schema for MsgVpnAclProfileClientConnectException
-func MsgVpnAclProfileClientConnectExceptionResourceSchema(requiredAttributes ...string) rschema.Schema {
-	schema := rschema.Schema{
+func MsgVpnAclProfileClientConnectExceptionResourceSchema(requiredAttributes ...string) schema.Schema {
+	schema := schema.Schema{
 		Description: "MsgVpnAclProfileClientConnectException",
-		Attributes: map[string]rschema.Attribute{
-			"acl_profile_name": rschema.StringAttribute{
+		Attributes: map[string]schema.Attribute{
+			"acl_profile_name": schema.StringAttribute{
 				Description: "The name of the ACL Profile.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "acl_profile_name"),
+				Optional:    !contains(requiredAttributes, "acl_profile_name"),
 
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.LengthAtMost(32),
 				},
+				PlanModifiers: StringPlanModifiersFor("acl_profile_name", requiredAttributes),
 			},
-			"client_connect_exception_address": rschema.StringAttribute{
+			"client_connect_exception_address": schema.StringAttribute{
 				Description: "The IP address/netmask of the client connect exception in CIDR form.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_connect_exception_address"),
+				Optional:    !contains(requiredAttributes, "client_connect_exception_address"),
+
+				PlanModifiers: StringPlanModifiersFor("client_connect_exception_address", requiredAttributes),
 			},
-			"msg_vpn_name": rschema.StringAttribute{
+			"msg_vpn_name": schema.StringAttribute{
 				Description: "The name of the Message VPN.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "msg_vpn_name"),
+				Optional:    !contains(requiredAttributes, "msg_vpn_name"),
+
+				PlanModifiers: StringPlanModifiersFor("msg_vpn_name", requiredAttributes),
 			},
 		},
 	}

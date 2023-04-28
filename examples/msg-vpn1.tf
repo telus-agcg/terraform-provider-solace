@@ -27,3 +27,12 @@ resource "solace_queue" "vpn1_queue" {
   access_type     = "non-exclusive"
   max_ttl         = 60
 }
+
+resource "solace_queue" "vpn1_another_queue" {
+  msg_vpn_name    = solace_msgvpn.vpn1.msg_vpn_name
+  queue_name      = "queue-b"
+  ingress_enabled = true
+  egress_enabled  = true
+  access_type     = "non-exclusive"
+  max_ttl         = 60
+}

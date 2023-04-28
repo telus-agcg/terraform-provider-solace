@@ -1,11 +1,11 @@
 package provider
 
 import (
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"telusag/terraform-provider-solace/sempv2"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 // MsgVpnAuthenticationOauthProfile struct for MsgVpnAuthenticationOauthProfile
@@ -110,269 +110,197 @@ func (tfData *MsgVpnAuthenticationOauthProfile) ToApi() *sempv2.MsgVpnAuthentica
 	}
 }
 
-// Terraform DataSource schema for MsgVpnAuthenticationOauthProfile
-func MsgVpnAuthenticationOauthProfileDataSourceSchema(requiredAttributes ...string) dschema.Schema {
-	schema := dschema.Schema{
-		Description: "MsgVpnAuthenticationOauthProfile",
-		Attributes: map[string]dschema.Attribute{
-			"authorization_groups_claim_name": dschema.StringAttribute{
-				Description: "The name of the groups claim. If non-empty, the specified claim will be used to determine groups for authorization. If empty, the authorizationType attribute of the Message VPN will be used to determine authorization. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"groups\"`.",
-				Optional:    true,
-			},
-			"client_id": dschema.StringAttribute{
-				Description: "The OAuth client id. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"client_required_type": dschema.StringAttribute{
-				Description: "The required value for the TYP field in the ID token header. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"JWT\"`.",
-				Optional:    true,
-			},
-			"client_secret": dschema.StringAttribute{
-				Description: "The OAuth client secret. This attribute is absent from a GET and not updated when absent in a PUT, subject to the exceptions in note 4. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"client_validate_type_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable verification of the TYP field in the ID token header. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
-			},
-			"disconnect_on_token_expiration_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable the disconnection of clients when their tokens expire. Changing this value does not affect existing clients, only new client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
-			},
-			"enabled": dschema.BoolAttribute{
-				Description: "Enable or disable the OAuth profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"endpoint_discovery": dschema.StringAttribute{
-				Description: "The OpenID Connect discovery endpoint or OAuth Authorization Server Metadata endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"endpoint_discovery_refresh_interval": dschema.Int64Attribute{
-				Description: "The number of seconds between discovery endpoint requests. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `86400`.",
-				Optional:    true,
-			},
-			"endpoint_introspection": dschema.StringAttribute{
-				Description: "The OAuth introspection endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"endpoint_introspection_timeout": dschema.Int64Attribute{
-				Description: "The maximum time in seconds a token introspection request is allowed to take. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1`.",
-				Optional:    true,
-			},
-			"endpoint_jwks": dschema.StringAttribute{
-				Description: "The OAuth JWKS endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"endpoint_jwks_refresh_interval": dschema.Int64Attribute{
-				Description: "The number of seconds between JWKS endpoint requests. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `86400`.",
-				Optional:    true,
-			},
-			"endpoint_userinfo": dschema.StringAttribute{
-				Description: "The OpenID Connect Userinfo endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"endpoint_userinfo_timeout": dschema.Int64Attribute{
-				Description: "The maximum time in seconds a userinfo request is allowed to take. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1`.",
-				Optional:    true,
-			},
-			"issuer": dschema.StringAttribute{
-				Description: "The Issuer Identifier for the OAuth provider. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"mqtt_username_validate_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable whether the API provided MQTT client username will be validated against the username calculated from the token(s). When enabled, connection attempts by MQTT clients are rejected if they differ. Note that this value only applies to MQTT clients; SMF client usernames will not be validated. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"msg_vpn_name": dschema.StringAttribute{
-				Description: "The name of the Message VPN.",
-				Optional:    true,
-			},
-			"oauth_profile_name": dschema.StringAttribute{
-				Description: "The name of the OAuth profile.",
-				Optional:    true,
-			},
-			"oauth_role": dschema.StringAttribute{
-				Description: "The OAuth role of the broker. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"client\"`. The allowed values and their meaning are:  <pre> \"client\" - The broker is in the OAuth client role. \"resource-server\" - The broker is in the OAuth resource server role. </pre> ",
-				Optional:    true,
-
-				Validators: []validator.String{
-					stringvalidator.OneOf("client", "resource-server"),
-				},
-			},
-			"resource_server_parse_access_token_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable parsing of the access token as a JWT. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
-			},
-			"resource_server_required_audience": dschema.StringAttribute{
-				Description: "The required audience value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"resource_server_required_issuer": dschema.StringAttribute{
-				Description: "The required issuer value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"resource_server_required_scope": dschema.StringAttribute{
-				Description: "A space-separated list of scopes that must be present in the scope claim. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"resource_server_required_type": dschema.StringAttribute{
-				Description: "The required TYP value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"at+jwt\"`.",
-				Optional:    true,
-			},
-			"resource_server_validate_audience_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable verification of the audience claim in the access token or introspection response. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
-			},
-			"resource_server_validate_issuer_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable verification of the issuer claim in the access token or introspection response. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
-			},
-			"resource_server_validate_scope_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable verification of the scope claim in the access token or introspection response. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
-			},
-			"resource_server_validate_type_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable verification of the TYP field in the access token header. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
-			},
-			"username_claim_name": dschema.StringAttribute{
-				Description: "The name of the username claim. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"sub\"`.",
-				Optional:    true,
-			},
-		},
-	}
-
-	return schema
-}
-
 // Terraform Resource schema for MsgVpnAuthenticationOauthProfile
-func MsgVpnAuthenticationOauthProfileResourceSchema(requiredAttributes ...string) rschema.Schema {
-	schema := rschema.Schema{
+func MsgVpnAuthenticationOauthProfileResourceSchema(requiredAttributes ...string) schema.Schema {
+	schema := schema.Schema{
 		Description: "MsgVpnAuthenticationOauthProfile",
-		Attributes: map[string]rschema.Attribute{
-			"authorization_groups_claim_name": rschema.StringAttribute{
+		Attributes: map[string]schema.Attribute{
+			"authorization_groups_claim_name": schema.StringAttribute{
 				Description: "The name of the groups claim. If non-empty, the specified claim will be used to determine groups for authorization. If empty, the authorizationType attribute of the Message VPN will be used to determine authorization. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"groups\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "authorization_groups_claim_name"),
+				Optional:    !contains(requiredAttributes, "authorization_groups_claim_name"),
+
+				PlanModifiers: StringPlanModifiersFor("authorization_groups_claim_name", requiredAttributes),
 			},
-			"client_id": rschema.StringAttribute{
+			"client_id": schema.StringAttribute{
 				Description: "The OAuth client id. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_id"),
+				Optional:    !contains(requiredAttributes, "client_id"),
+
+				PlanModifiers: StringPlanModifiersFor("client_id", requiredAttributes),
 			},
-			"client_required_type": rschema.StringAttribute{
+			"client_required_type": schema.StringAttribute{
 				Description: "The required value for the TYP field in the ID token header. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"JWT\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_required_type"),
+				Optional:    !contains(requiredAttributes, "client_required_type"),
+
+				PlanModifiers: StringPlanModifiersFor("client_required_type", requiredAttributes),
 			},
-			"client_secret": rschema.StringAttribute{
+			"client_secret": schema.StringAttribute{
 				Description: "The OAuth client secret. This attribute is absent from a GET and not updated when absent in a PUT, subject to the exceptions in note 4. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_secret"),
+				Optional:    !contains(requiredAttributes, "client_secret"),
+
+				PlanModifiers: StringPlanModifiersFor("client_secret", requiredAttributes),
 			},
-			"client_validate_type_enabled": rschema.BoolAttribute{
+			"client_validate_type_enabled": schema.BoolAttribute{
 				Description: "Enable or disable verification of the TYP field in the ID token header. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_validate_type_enabled"),
+				Optional:    !contains(requiredAttributes, "client_validate_type_enabled"),
 			},
-			"disconnect_on_token_expiration_enabled": rschema.BoolAttribute{
+			"disconnect_on_token_expiration_enabled": schema.BoolAttribute{
 				Description: "Enable or disable the disconnection of clients when their tokens expire. Changing this value does not affect existing clients, only new client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "disconnect_on_token_expiration_enabled"),
+				Optional:    !contains(requiredAttributes, "disconnect_on_token_expiration_enabled"),
 			},
-			"enabled": rschema.BoolAttribute{
+			"enabled": schema.BoolAttribute{
 				Description: "Enable or disable the OAuth profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "enabled"),
+				Optional:    !contains(requiredAttributes, "enabled"),
 			},
-			"endpoint_discovery": rschema.StringAttribute{
+			"endpoint_discovery": schema.StringAttribute{
 				Description: "The OpenID Connect discovery endpoint or OAuth Authorization Server Metadata endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_discovery"),
+				Optional:    !contains(requiredAttributes, "endpoint_discovery"),
+
+				PlanModifiers: StringPlanModifiersFor("endpoint_discovery", requiredAttributes),
 			},
-			"endpoint_discovery_refresh_interval": rschema.Int64Attribute{
+			"endpoint_discovery_refresh_interval": schema.Int64Attribute{
 				Description: "The number of seconds between discovery endpoint requests. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `86400`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_discovery_refresh_interval"),
+				Optional:    !contains(requiredAttributes, "endpoint_discovery_refresh_interval"),
 			},
-			"endpoint_introspection": rschema.StringAttribute{
+			"endpoint_introspection": schema.StringAttribute{
 				Description: "The OAuth introspection endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_introspection"),
+				Optional:    !contains(requiredAttributes, "endpoint_introspection"),
+
+				PlanModifiers: StringPlanModifiersFor("endpoint_introspection", requiredAttributes),
 			},
-			"endpoint_introspection_timeout": rschema.Int64Attribute{
+			"endpoint_introspection_timeout": schema.Int64Attribute{
 				Description: "The maximum time in seconds a token introspection request is allowed to take. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_introspection_timeout"),
+				Optional:    !contains(requiredAttributes, "endpoint_introspection_timeout"),
 			},
-			"endpoint_jwks": rschema.StringAttribute{
+			"endpoint_jwks": schema.StringAttribute{
 				Description: "The OAuth JWKS endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_jwks"),
+				Optional:    !contains(requiredAttributes, "endpoint_jwks"),
+
+				PlanModifiers: StringPlanModifiersFor("endpoint_jwks", requiredAttributes),
 			},
-			"endpoint_jwks_refresh_interval": rschema.Int64Attribute{
+			"endpoint_jwks_refresh_interval": schema.Int64Attribute{
 				Description: "The number of seconds between JWKS endpoint requests. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `86400`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_jwks_refresh_interval"),
+				Optional:    !contains(requiredAttributes, "endpoint_jwks_refresh_interval"),
 			},
-			"endpoint_userinfo": rschema.StringAttribute{
+			"endpoint_userinfo": schema.StringAttribute{
 				Description: "The OpenID Connect Userinfo endpoint. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_userinfo"),
+				Optional:    !contains(requiredAttributes, "endpoint_userinfo"),
+
+				PlanModifiers: StringPlanModifiersFor("endpoint_userinfo", requiredAttributes),
 			},
-			"endpoint_userinfo_timeout": rschema.Int64Attribute{
+			"endpoint_userinfo_timeout": schema.Int64Attribute{
 				Description: "The maximum time in seconds a userinfo request is allowed to take. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "endpoint_userinfo_timeout"),
+				Optional:    !contains(requiredAttributes, "endpoint_userinfo_timeout"),
 			},
-			"issuer": rschema.StringAttribute{
+			"issuer": schema.StringAttribute{
 				Description: "The Issuer Identifier for the OAuth provider. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "issuer"),
+				Optional:    !contains(requiredAttributes, "issuer"),
+
+				PlanModifiers: StringPlanModifiersFor("issuer", requiredAttributes),
 			},
-			"mqtt_username_validate_enabled": rschema.BoolAttribute{
+			"mqtt_username_validate_enabled": schema.BoolAttribute{
 				Description: "Enable or disable whether the API provided MQTT client username will be validated against the username calculated from the token(s). When enabled, connection attempts by MQTT clients are rejected if they differ. Note that this value only applies to MQTT clients; SMF client usernames will not be validated. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "mqtt_username_validate_enabled"),
+				Optional:    !contains(requiredAttributes, "mqtt_username_validate_enabled"),
 			},
-			"msg_vpn_name": rschema.StringAttribute{
+			"msg_vpn_name": schema.StringAttribute{
 				Description: "The name of the Message VPN.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "msg_vpn_name"),
+				Optional:    !contains(requiredAttributes, "msg_vpn_name"),
+
+				PlanModifiers: StringPlanModifiersFor("msg_vpn_name", requiredAttributes),
 			},
-			"oauth_profile_name": rschema.StringAttribute{
+			"oauth_profile_name": schema.StringAttribute{
 				Description: "The name of the OAuth profile.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "oauth_profile_name"),
+				Optional:    !contains(requiredAttributes, "oauth_profile_name"),
+
+				PlanModifiers: StringPlanModifiersFor("oauth_profile_name", requiredAttributes),
 			},
-			"oauth_role": rschema.StringAttribute{
+			"oauth_role": schema.StringAttribute{
 				Description: "The OAuth role of the broker. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"client\"`. The allowed values and their meaning are:  <pre> \"client\" - The broker is in the OAuth client role. \"resource-server\" - The broker is in the OAuth resource server role. </pre> ",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "oauth_role"),
+				Optional:    !contains(requiredAttributes, "oauth_role"),
 
 				Validators: []validator.String{
 					stringvalidator.OneOf("client", "resource-server"),
 				},
+				PlanModifiers: StringPlanModifiersFor("oauth_role", requiredAttributes),
 			},
-			"resource_server_parse_access_token_enabled": rschema.BoolAttribute{
+			"resource_server_parse_access_token_enabled": schema.BoolAttribute{
 				Description: "Enable or disable parsing of the access token as a JWT. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_parse_access_token_enabled"),
+				Optional:    !contains(requiredAttributes, "resource_server_parse_access_token_enabled"),
 			},
-			"resource_server_required_audience": rschema.StringAttribute{
+			"resource_server_required_audience": schema.StringAttribute{
 				Description: "The required audience value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_required_audience"),
+				Optional:    !contains(requiredAttributes, "resource_server_required_audience"),
+
+				PlanModifiers: StringPlanModifiersFor("resource_server_required_audience", requiredAttributes),
 			},
-			"resource_server_required_issuer": rschema.StringAttribute{
+			"resource_server_required_issuer": schema.StringAttribute{
 				Description: "The required issuer value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_required_issuer"),
+				Optional:    !contains(requiredAttributes, "resource_server_required_issuer"),
+
+				PlanModifiers: StringPlanModifiersFor("resource_server_required_issuer", requiredAttributes),
 			},
-			"resource_server_required_scope": rschema.StringAttribute{
+			"resource_server_required_scope": schema.StringAttribute{
 				Description: "A space-separated list of scopes that must be present in the scope claim. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_required_scope"),
+				Optional:    !contains(requiredAttributes, "resource_server_required_scope"),
+
+				PlanModifiers: StringPlanModifiersFor("resource_server_required_scope", requiredAttributes),
 			},
-			"resource_server_required_type": rschema.StringAttribute{
+			"resource_server_required_type": schema.StringAttribute{
 				Description: "The required TYP value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"at+jwt\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_required_type"),
+				Optional:    !contains(requiredAttributes, "resource_server_required_type"),
+
+				PlanModifiers: StringPlanModifiersFor("resource_server_required_type", requiredAttributes),
 			},
-			"resource_server_validate_audience_enabled": rschema.BoolAttribute{
+			"resource_server_validate_audience_enabled": schema.BoolAttribute{
 				Description: "Enable or disable verification of the audience claim in the access token or introspection response. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_validate_audience_enabled"),
+				Optional:    !contains(requiredAttributes, "resource_server_validate_audience_enabled"),
 			},
-			"resource_server_validate_issuer_enabled": rschema.BoolAttribute{
+			"resource_server_validate_issuer_enabled": schema.BoolAttribute{
 				Description: "Enable or disable verification of the issuer claim in the access token or introspection response. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_validate_issuer_enabled"),
+				Optional:    !contains(requiredAttributes, "resource_server_validate_issuer_enabled"),
 			},
-			"resource_server_validate_scope_enabled": rschema.BoolAttribute{
+			"resource_server_validate_scope_enabled": schema.BoolAttribute{
 				Description: "Enable or disable verification of the scope claim in the access token or introspection response. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_validate_scope_enabled"),
+				Optional:    !contains(requiredAttributes, "resource_server_validate_scope_enabled"),
 			},
-			"resource_server_validate_type_enabled": rschema.BoolAttribute{
+			"resource_server_validate_type_enabled": schema.BoolAttribute{
 				Description: "Enable or disable verification of the TYP field in the access token header. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "resource_server_validate_type_enabled"),
+				Optional:    !contains(requiredAttributes, "resource_server_validate_type_enabled"),
 			},
-			"username_claim_name": rschema.StringAttribute{
+			"username_claim_name": schema.StringAttribute{
 				Description: "The name of the username claim. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"sub\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "username_claim_name"),
+				Optional:    !contains(requiredAttributes, "username_claim_name"),
+
+				PlanModifiers: StringPlanModifiersFor("username_claim_name", requiredAttributes),
 			},
 		},
 	}

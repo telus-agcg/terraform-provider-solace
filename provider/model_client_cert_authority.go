@@ -1,9 +1,9 @@
 package provider
 
 import (
-	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"telusag/terraform-provider-solace/sempv2"
+
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
 // ClientCertAuthority struct for ClientCertAuthority
@@ -45,93 +45,67 @@ func (tfData *ClientCertAuthority) ToApi() *sempv2.ClientCertAuthority {
 	}
 }
 
-// Terraform DataSource schema for ClientCertAuthority
-func ClientCertAuthorityDataSourceSchema(requiredAttributes ...string) dschema.Schema {
-	schema := dschema.Schema{
-		Description: "ClientCertAuthority",
-		Attributes: map[string]dschema.Attribute{
-			"cert_authority_name": dschema.StringAttribute{
-				Description: "The name of the Certificate Authority.",
-				Optional:    true,
-			},
-			"cert_content": dschema.StringAttribute{
-				Description: "The PEM formatted content for the trusted root certificate of a client Certificate Authority. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"crl_day_list": dschema.StringAttribute{
-				Description: "The scheduled CRL refresh day(s), specified as \"daily\" or a comma-separated list of days. Days must be specified as \"Sun\", \"Mon\", \"Tue\", \"Wed\", \"Thu\", \"Fri\", or \"Sat\", with no spaces, and in sorted order from Sunday to Saturday. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"daily\"`.",
-				Optional:    true,
-			},
-			"crl_time_list": dschema.StringAttribute{
-				Description: "The scheduled CRL refresh time(s), specified as \"hourly\" or a comma-separated list of 24-hour times in the form hh:mm, or h:mm. There must be no spaces, and times (up to 4) must be in sorted order from 0:00 to 23:59. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"3:00\"`.",
-				Optional:    true,
-			},
-			"crl_url": dschema.StringAttribute{
-				Description: "The URL for the CRL source. This is a required attribute for CRL to be operational and the URL must be complete with http:// included. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"ocsp_non_responder_cert_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing a non-responder certificate to sign an OCSP response. Typically used with an OCSP override URL in cases where a single certificate is used to sign client certificates and OCSP responses. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"ocsp_override_url": dschema.StringAttribute{
-				Description: "The OCSP responder URL to use for overriding the one supplied in the client certificate. The URL must be complete with http:// included. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"\"`.",
-				Optional:    true,
-			},
-			"ocsp_timeout": dschema.Int64Attribute{
-				Description: "The timeout in seconds to receive a response from the OCSP responder after sending a request or making the initial connection attempt. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `5`.",
-				Optional:    true,
-			},
-			"revocation_check_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable Certificate Authority revocation checking. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-		},
-	}
-
-	return schema
-}
-
 // Terraform Resource schema for ClientCertAuthority
-func ClientCertAuthorityResourceSchema(requiredAttributes ...string) rschema.Schema {
-	schema := rschema.Schema{
+func ClientCertAuthorityResourceSchema(requiredAttributes ...string) schema.Schema {
+	schema := schema.Schema{
 		Description: "ClientCertAuthority",
-		Attributes: map[string]rschema.Attribute{
-			"cert_authority_name": rschema.StringAttribute{
+		Attributes: map[string]schema.Attribute{
+			"cert_authority_name": schema.StringAttribute{
 				Description: "The name of the Certificate Authority.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "cert_authority_name"),
+				Optional:    !contains(requiredAttributes, "cert_authority_name"),
+
+				PlanModifiers: StringPlanModifiersFor("cert_authority_name", requiredAttributes),
 			},
-			"cert_content": rschema.StringAttribute{
+			"cert_content": schema.StringAttribute{
 				Description: "The PEM formatted content for the trusted root certificate of a client Certificate Authority. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "cert_content"),
+				Optional:    !contains(requiredAttributes, "cert_content"),
+
+				PlanModifiers: StringPlanModifiersFor("cert_content", requiredAttributes),
 			},
-			"crl_day_list": rschema.StringAttribute{
+			"crl_day_list": schema.StringAttribute{
 				Description: "The scheduled CRL refresh day(s), specified as \"daily\" or a comma-separated list of days. Days must be specified as \"Sun\", \"Mon\", \"Tue\", \"Wed\", \"Thu\", \"Fri\", or \"Sat\", with no spaces, and in sorted order from Sunday to Saturday. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"daily\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "crl_day_list"),
+				Optional:    !contains(requiredAttributes, "crl_day_list"),
+
+				PlanModifiers: StringPlanModifiersFor("crl_day_list", requiredAttributes),
 			},
-			"crl_time_list": rschema.StringAttribute{
+			"crl_time_list": schema.StringAttribute{
 				Description: "The scheduled CRL refresh time(s), specified as \"hourly\" or a comma-separated list of 24-hour times in the form hh:mm, or h:mm. There must be no spaces, and times (up to 4) must be in sorted order from 0:00 to 23:59. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"3:00\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "crl_time_list"),
+				Optional:    !contains(requiredAttributes, "crl_time_list"),
+
+				PlanModifiers: StringPlanModifiersFor("crl_time_list", requiredAttributes),
 			},
-			"crl_url": rschema.StringAttribute{
+			"crl_url": schema.StringAttribute{
 				Description: "The URL for the CRL source. This is a required attribute for CRL to be operational and the URL must be complete with http:// included. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "crl_url"),
+				Optional:    !contains(requiredAttributes, "crl_url"),
+
+				PlanModifiers: StringPlanModifiersFor("crl_url", requiredAttributes),
 			},
-			"ocsp_non_responder_cert_enabled": rschema.BoolAttribute{
+			"ocsp_non_responder_cert_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing a non-responder certificate to sign an OCSP response. Typically used with an OCSP override URL in cases where a single certificate is used to sign client certificates and OCSP responses. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "ocsp_non_responder_cert_enabled"),
+				Optional:    !contains(requiredAttributes, "ocsp_non_responder_cert_enabled"),
 			},
-			"ocsp_override_url": rschema.StringAttribute{
+			"ocsp_override_url": schema.StringAttribute{
 				Description: "The OCSP responder URL to use for overriding the one supplied in the client certificate. The URL must be complete with http:// included. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `\"\"`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "ocsp_override_url"),
+				Optional:    !contains(requiredAttributes, "ocsp_override_url"),
+
+				PlanModifiers: StringPlanModifiersFor("ocsp_override_url", requiredAttributes),
 			},
-			"ocsp_timeout": rschema.Int64Attribute{
+			"ocsp_timeout": schema.Int64Attribute{
 				Description: "The timeout in seconds to receive a response from the OCSP responder after sending a request or making the initial connection attempt. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `5`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "ocsp_timeout"),
+				Optional:    !contains(requiredAttributes, "ocsp_timeout"),
 			},
-			"revocation_check_enabled": rschema.BoolAttribute{
+			"revocation_check_enabled": schema.BoolAttribute{
 				Description: "Enable or disable Certificate Authority revocation checking. Changes to this attribute are synchronized to HA mates via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "revocation_check_enabled"),
+				Optional:    !contains(requiredAttributes, "revocation_check_enabled"),
 			},
 		},
 	}

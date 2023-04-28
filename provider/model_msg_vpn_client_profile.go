@@ -1,11 +1,11 @@
 package provider
 
 import (
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"telusag/terraform-provider-solace/sempv2"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 // MsgVpnClientProfile struct for MsgVpnClientProfile
@@ -203,537 +203,352 @@ func (tfData *MsgVpnClientProfile) ToApi() *sempv2.MsgVpnClientProfile {
 	}
 }
 
-// Terraform DataSource schema for MsgVpnClientProfile
-func MsgVpnClientProfileDataSourceSchema(requiredAttributes ...string) dschema.Schema {
-	schema := dschema.Schema{
-		Description: "MsgVpnClientProfile",
-		Attributes: map[string]dschema.Attribute{
-			"allow_bridge_connections_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing Bridge clients using the Client Profile to connect. Changing this setting does not affect existing Bridge client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"allow_cut_through_forwarding_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing clients using the Client Profile to bind to endpoints with the cut-through forwarding delivery mode. Changing this value does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Deprecated since 2.22. This attribute has been deprecated. Please visit the Solace Product Lifecycle Policy web page for details on deprecated features.",
-				Optional:    true,
-			},
-			"allow_guaranteed_endpoint_create_durability": dschema.StringAttribute{
-				Description: "The types of Queues and Topic Endpoints that clients using the client-profile can create. Changing this value does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"all\"`. The allowed values and their meaning are:  <pre> \"all\" - Client can create any type of endpoint. \"durable\" - Client can create only durable endpoints. \"non-durable\" - Client can create only non-durable endpoints. </pre>  Available since 2.14.",
-				Optional:    true,
-
-				Validators: []validator.String{
-					stringvalidator.OneOf("all", "durable", "non-durable"),
-				},
-			},
-			"allow_guaranteed_endpoint_create_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing clients using the Client Profile to create topic endponts or queues. Changing this value does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"allow_guaranteed_msg_receive_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing clients using the Client Profile to receive guaranteed messages. Changing this setting does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"allow_guaranteed_msg_send_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing clients using the Client Profile to send guaranteed messages. Changing this setting does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"allow_shared_subscriptions_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing shared subscriptions. Changing this setting does not affect existing subscriptions. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.11.",
-				Optional:    true,
-			},
-			"allow_transacted_sessions_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing clients using the Client Profile to establish transacted sessions. Changing this setting does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"api_queue_management_copy_from_on_create_name": dschema.StringAttribute{
-				Description: "The name of a queue to copy settings from when a new queue is created by a client using the Client Profile. The referenced queue must exist in the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Deprecated since 2.14. This attribute has been replaced with `apiQueueManagementCopyFromOnCreateTemplateName`.",
-				Optional:    true,
-			},
-			"api_queue_management_copy_from_on_create_template_name": dschema.StringAttribute{
-				Description: "The name of a queue template to copy settings from when a new queue is created by a client using the Client Profile. If the referenced queue template does not exist, queue creation will fail when it tries to resolve this template. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Available since 2.14.",
-				Optional:    true,
-			},
-			"api_topic_endpoint_management_copy_from_on_create_name": dschema.StringAttribute{
-				Description: "The name of a topic endpoint to copy settings from when a new topic endpoint is created by a client using the Client Profile. The referenced topic endpoint must exist in the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Deprecated since 2.14. This attribute has been replaced with `apiTopicEndpointManagementCopyFromOnCreateTemplateName`.",
-				Optional:    true,
-			},
-			"api_topic_endpoint_management_copy_from_on_create_template_name": dschema.StringAttribute{
-				Description: "The name of a topic endpoint template to copy settings from when a new topic endpoint is created by a client using the Client Profile. If the referenced topic endpoint template does not exist, topic endpoint creation will fail when it tries to resolve this template. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Available since 2.14.",
-				Optional:    true,
-			},
-			"client_profile_name": dschema.StringAttribute{
-				Description: "The name of the Client Profile.",
-				Optional:    true,
-			},
-			"compression_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing clients using the Client Profile to use compression. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`. Available since 2.10.",
-				Optional:    true,
-			},
-			"eliding_delay": dschema.Int64Attribute{
-				Description: "The amount of time to delay the delivery of messages to clients using the Client Profile after the initial message has been delivered (the eliding delay interval), in milliseconds. A value of 0 means there is no delay in delivering messages to clients. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
-				Optional:    true,
-			},
-			"eliding_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable message eliding for clients using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"eliding_max_topic_count": dschema.Int64Attribute{
-				Description: "The maximum number of topics tracked for message eliding per client connection using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `256`.",
-				Optional:    true,
-			},
-			"event_client_provisioned_endpoint_spool_usage_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdByPercentAttributeTypes,
-			},
-			"event_connection_count_per_client_username_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_egress_flow_count_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_endpoint_count_per_client_username_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_ingress_flow_count_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_service_smf_connection_count_per_client_username_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_service_web_connection_count_per_client_username_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_subscription_count_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_transacted_session_count_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"event_transaction_count_threshold": dschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
-				AttributeTypes: EventThresholdAttributeTypes,
-			},
-			"max_connection_count_per_client_username": dschema.Int64Attribute{
-				Description: "The maximum number of client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.",
-				Optional:    true,
-			},
-			"max_egress_flow_count": dschema.Int64Attribute{
-				Description: "The maximum number of transmit flows that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
-				Optional:    true,
-			},
-			"max_endpoint_count_per_client_username": dschema.Int64Attribute{
-				Description: "The maximum number of queues and topic endpoints that can be created by clients with the same Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
-				Optional:    true,
-			},
-			"max_ingress_flow_count": dschema.Int64Attribute{
-				Description: "The maximum number of receive flows that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
-				Optional:    true,
-			},
-			"max_msgs_per_transaction": dschema.Int64Attribute{
-				Description: "The maximum number of publisher and consumer messages combined that is allowed within a transaction for each client associated with this client-profile. Exceeding this limit will result in a transaction prepare or commit failure. Changing this value during operation will not affect existing sessions. It is only validated at transaction creation time. Large transactions consume more resources and are more likely to require retrieving messages from the ADB or from disk to process the transaction prepare or commit requests. The transaction processing rate may diminish if a large number of messages must be retrieved from the ADB or from disk. Care should be taken to not use excessively large transactions needlessly to avoid exceeding resource limits and to avoid reducing the overall broker performance. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `256`. Available since 2.20.",
-				Optional:    true,
-			},
-			"max_subscription_count": dschema.Int64Attribute{
-				Description: "The maximum number of subscriptions per client using the Client Profile. This limit is not enforced when a client adds a subscription to an endpoint, except for MQTT QoS 1 subscriptions. In addition, this limit is not enforced when a subscription is added using a management interface, such as CLI or SEMP. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default varies by platform.",
-				Optional:    true,
-			},
-			"max_transacted_session_count": dschema.Int64Attribute{
-				Description: "The maximum number of transacted sessions that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `10`.",
-				Optional:    true,
-			},
-			"max_transaction_count": dschema.Int64Attribute{
-				Description: "The maximum number of transactions that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default varies by platform.",
-				Optional:    true,
-			},
-			"msg_vpn_name": dschema.StringAttribute{
-				Description: "The name of the Message VPN.",
-				Optional:    true,
-			},
-			"queue_control1_max_depth": dschema.Int64Attribute{
-				Description: "The maximum depth of the \"Control 1\" (C-1) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
-			},
-			"queue_control1_min_msg_burst": dschema.Int64Attribute{
-				Description: "The number of messages that are always allowed entry into the \"Control 1\" (C-1) priority queue, regardless of the `queueControl1MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
-			},
-			"queue_direct1_max_depth": dschema.Int64Attribute{
-				Description: "The maximum depth of the \"Direct 1\" (D-1) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
-			},
-			"queue_direct1_min_msg_burst": dschema.Int64Attribute{
-				Description: "The number of messages that are always allowed entry into the \"Direct 1\" (D-1) priority queue, regardless of the `queueDirect1MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
-			},
-			"queue_direct2_max_depth": dschema.Int64Attribute{
-				Description: "The maximum depth of the \"Direct 2\" (D-2) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
-			},
-			"queue_direct2_min_msg_burst": dschema.Int64Attribute{
-				Description: "The number of messages that are always allowed entry into the \"Direct 2\" (D-2) priority queue, regardless of the `queueDirect2MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
-			},
-			"queue_direct3_max_depth": dschema.Int64Attribute{
-				Description: "The maximum depth of the \"Direct 3\" (D-3) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
-			},
-			"queue_direct3_min_msg_burst": dschema.Int64Attribute{
-				Description: "The number of messages that are always allowed entry into the \"Direct 3\" (D-3) priority queue, regardless of the `queueDirect3MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
-			},
-			"queue_guaranteed1_max_depth": dschema.Int64Attribute{
-				Description: "The maximum depth of the \"Guaranteed 1\" (G-1) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
-			},
-			"queue_guaranteed1_min_msg_burst": dschema.Int64Attribute{
-				Description: "The number of messages that are always allowed entry into the \"Guaranteed 1\" (G-3) priority queue, regardless of the `queueGuaranteed1MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `255`.",
-				Optional:    true,
-			},
-			"reject_msg_to_sender_on_no_subscription_match_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable the sending of a negative acknowledgement (NACK) to a client using the Client Profile when discarding a guaranteed message due to no matching subscription found. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.2.",
-				Optional:    true,
-			},
-			"replication_allow_client_connect_when_standby_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing clients using the Client Profile to connect to the Message VPN when its replication state is standby. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
-			},
-			"service_min_keepalive_timeout": dschema.Int64Attribute{
-				Description: "The minimum client keepalive timeout which will be enforced for client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `30`. Available since 2.19.",
-				Optional:    true,
-			},
-			"service_smf_max_connection_count_per_client_username": dschema.Int64Attribute{
-				Description: "The maximum number of SMF client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.",
-				Optional:    true,
-			},
-			"service_smf_min_keepalive_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable the enforcement of a minimum keepalive timeout for SMF clients. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.19.",
-				Optional:    true,
-			},
-			"service_web_inactive_timeout": dschema.Int64Attribute{
-				Description: "The timeout for inactive Web Transport client sessions using the Client Profile, in seconds. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `30`.",
-				Optional:    true,
-			},
-			"service_web_max_connection_count_per_client_username": dschema.Int64Attribute{
-				Description: "The maximum number of Web Transport client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.",
-				Optional:    true,
-			},
-			"service_web_max_payload": dschema.Int64Attribute{
-				Description: "The maximum Web Transport payload size before fragmentation occurs for clients using the Client Profile, in bytes. The size of the header is not included. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000000`.",
-				Optional:    true,
-			},
-			"tcp_congestion_window_size": dschema.Int64Attribute{
-				Description: "The TCP initial congestion window size for clients using the Client Profile, in multiples of the TCP Maximum Segment Size (MSS). Changing the value from its default of 2 results in non-compliance with RFC 2581. Contact support before changing this value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `2`.",
-				Optional:    true,
-			},
-			"tcp_keepalive_count": dschema.Int64Attribute{
-				Description: "The number of TCP keepalive retransmissions to a client using the Client Profile before declaring that it is not available. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `5`.",
-				Optional:    true,
-			},
-			"tcp_keepalive_idle_time": dschema.Int64Attribute{
-				Description: "The amount of time a client connection using the Client Profile must remain idle before TCP begins sending keepalive probes, in seconds. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `3`.",
-				Optional:    true,
-			},
-			"tcp_keepalive_interval": dschema.Int64Attribute{
-				Description: "The amount of time between TCP keepalive retransmissions to a client using the Client Profile when no acknowledgement is received, in seconds. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1`.",
-				Optional:    true,
-			},
-			"tcp_max_segment_size": dschema.Int64Attribute{
-				Description: "The TCP maximum segment size for clients using the Client Profile, in bytes. Changes are applied to all existing connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1460`.",
-				Optional:    true,
-			},
-			"tcp_max_window_size": dschema.Int64Attribute{
-				Description: "The TCP maximum window size for clients using the Client Profile, in kilobytes. Changes are applied to all existing connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `256`.",
-				Optional:    true,
-			},
-			"tls_allow_downgrade_to_plain_text_enabled": dschema.BoolAttribute{
-				Description: "Enable or disable allowing a client using the Client Profile to downgrade an encrypted connection to plain text. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`. Available since 2.8.",
-				Optional:    true,
-			},
-		},
-	}
-
-	return schema
-}
-
 // Terraform Resource schema for MsgVpnClientProfile
-func MsgVpnClientProfileResourceSchema(requiredAttributes ...string) rschema.Schema {
-	schema := rschema.Schema{
+func MsgVpnClientProfileResourceSchema(requiredAttributes ...string) schema.Schema {
+	schema := schema.Schema{
 		Description: "MsgVpnClientProfile",
-		Attributes: map[string]rschema.Attribute{
-			"allow_bridge_connections_enabled": rschema.BoolAttribute{
+		Attributes: map[string]schema.Attribute{
+			"allow_bridge_connections_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing Bridge clients using the Client Profile to connect. Changing this setting does not affect existing Bridge client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_bridge_connections_enabled"),
+				Optional:    !contains(requiredAttributes, "allow_bridge_connections_enabled"),
 			},
-			"allow_cut_through_forwarding_enabled": rschema.BoolAttribute{
+			"allow_cut_through_forwarding_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing clients using the Client Profile to bind to endpoints with the cut-through forwarding delivery mode. Changing this value does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Deprecated since 2.22. This attribute has been deprecated. Please visit the Solace Product Lifecycle Policy web page for details on deprecated features.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_cut_through_forwarding_enabled"),
+				Optional:    !contains(requiredAttributes, "allow_cut_through_forwarding_enabled"),
 			},
-			"allow_guaranteed_endpoint_create_durability": rschema.StringAttribute{
+			"allow_guaranteed_endpoint_create_durability": schema.StringAttribute{
 				Description: "The types of Queues and Topic Endpoints that clients using the client-profile can create. Changing this value does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"all\"`. The allowed values and their meaning are:  <pre> \"all\" - Client can create any type of endpoint. \"durable\" - Client can create only durable endpoints. \"non-durable\" - Client can create only non-durable endpoints. </pre>  Available since 2.14.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_guaranteed_endpoint_create_durability"),
+				Optional:    !contains(requiredAttributes, "allow_guaranteed_endpoint_create_durability"),
 
 				Validators: []validator.String{
 					stringvalidator.OneOf("all", "durable", "non-durable"),
 				},
+				PlanModifiers: StringPlanModifiersFor("allow_guaranteed_endpoint_create_durability", requiredAttributes),
 			},
-			"allow_guaranteed_endpoint_create_enabled": rschema.BoolAttribute{
+			"allow_guaranteed_endpoint_create_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing clients using the Client Profile to create topic endponts or queues. Changing this value does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_guaranteed_endpoint_create_enabled"),
+				Optional:    !contains(requiredAttributes, "allow_guaranteed_endpoint_create_enabled"),
 			},
-			"allow_guaranteed_msg_receive_enabled": rschema.BoolAttribute{
+			"allow_guaranteed_msg_receive_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing clients using the Client Profile to receive guaranteed messages. Changing this setting does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_guaranteed_msg_receive_enabled"),
+				Optional:    !contains(requiredAttributes, "allow_guaranteed_msg_receive_enabled"),
 			},
-			"allow_guaranteed_msg_send_enabled": rschema.BoolAttribute{
+			"allow_guaranteed_msg_send_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing clients using the Client Profile to send guaranteed messages. Changing this setting does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_guaranteed_msg_send_enabled"),
+				Optional:    !contains(requiredAttributes, "allow_guaranteed_msg_send_enabled"),
 			},
-			"allow_shared_subscriptions_enabled": rschema.BoolAttribute{
+			"allow_shared_subscriptions_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing shared subscriptions. Changing this setting does not affect existing subscriptions. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.11.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_shared_subscriptions_enabled"),
+				Optional:    !contains(requiredAttributes, "allow_shared_subscriptions_enabled"),
 			},
-			"allow_transacted_sessions_enabled": rschema.BoolAttribute{
+			"allow_transacted_sessions_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing clients using the Client Profile to establish transacted sessions. Changing this setting does not affect existing client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "allow_transacted_sessions_enabled"),
+				Optional:    !contains(requiredAttributes, "allow_transacted_sessions_enabled"),
 			},
-			"api_queue_management_copy_from_on_create_name": rschema.StringAttribute{
+			"api_queue_management_copy_from_on_create_name": schema.StringAttribute{
 				Description: "The name of a queue to copy settings from when a new queue is created by a client using the Client Profile. The referenced queue must exist in the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Deprecated since 2.14. This attribute has been replaced with `apiQueueManagementCopyFromOnCreateTemplateName`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "api_queue_management_copy_from_on_create_name"),
+				Optional:    !contains(requiredAttributes, "api_queue_management_copy_from_on_create_name"),
+
+				PlanModifiers: StringPlanModifiersFor("api_queue_management_copy_from_on_create_name", requiredAttributes),
 			},
-			"api_queue_management_copy_from_on_create_template_name": rschema.StringAttribute{
+			"api_queue_management_copy_from_on_create_template_name": schema.StringAttribute{
 				Description: "The name of a queue template to copy settings from when a new queue is created by a client using the Client Profile. If the referenced queue template does not exist, queue creation will fail when it tries to resolve this template. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Available since 2.14.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "api_queue_management_copy_from_on_create_template_name"),
+				Optional:    !contains(requiredAttributes, "api_queue_management_copy_from_on_create_template_name"),
+
+				PlanModifiers: StringPlanModifiersFor("api_queue_management_copy_from_on_create_template_name", requiredAttributes),
 			},
-			"api_topic_endpoint_management_copy_from_on_create_name": rschema.StringAttribute{
+			"api_topic_endpoint_management_copy_from_on_create_name": schema.StringAttribute{
 				Description: "The name of a topic endpoint to copy settings from when a new topic endpoint is created by a client using the Client Profile. The referenced topic endpoint must exist in the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Deprecated since 2.14. This attribute has been replaced with `apiTopicEndpointManagementCopyFromOnCreateTemplateName`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "api_topic_endpoint_management_copy_from_on_create_name"),
+				Optional:    !contains(requiredAttributes, "api_topic_endpoint_management_copy_from_on_create_name"),
+
+				PlanModifiers: StringPlanModifiersFor("api_topic_endpoint_management_copy_from_on_create_name", requiredAttributes),
 			},
-			"api_topic_endpoint_management_copy_from_on_create_template_name": rschema.StringAttribute{
+			"api_topic_endpoint_management_copy_from_on_create_template_name": schema.StringAttribute{
 				Description: "The name of a topic endpoint template to copy settings from when a new topic endpoint is created by a client using the Client Profile. If the referenced topic endpoint template does not exist, topic endpoint creation will fail when it tries to resolve this template. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"\"`. Available since 2.14.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "api_topic_endpoint_management_copy_from_on_create_template_name"),
+				Optional:    !contains(requiredAttributes, "api_topic_endpoint_management_copy_from_on_create_template_name"),
+
+				PlanModifiers: StringPlanModifiersFor("api_topic_endpoint_management_copy_from_on_create_template_name", requiredAttributes),
 			},
-			"client_profile_name": rschema.StringAttribute{
+			"client_profile_name": schema.StringAttribute{
 				Description: "The name of the Client Profile.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "client_profile_name"),
+				Optional:    !contains(requiredAttributes, "client_profile_name"),
+
+				PlanModifiers: StringPlanModifiersFor("client_profile_name", requiredAttributes),
 			},
-			"compression_enabled": rschema.BoolAttribute{
+			"compression_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing clients using the Client Profile to use compression. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`. Available since 2.10.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "compression_enabled"),
+				Optional:    !contains(requiredAttributes, "compression_enabled"),
 			},
-			"eliding_delay": rschema.Int64Attribute{
+			"eliding_delay": schema.Int64Attribute{
 				Description: "The amount of time to delay the delivery of messages to clients using the Client Profile after the initial message has been delivered (the eliding delay interval), in milliseconds. A value of 0 means there is no delay in delivering messages to clients. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "eliding_delay"),
+				Optional:    !contains(requiredAttributes, "eliding_delay"),
 			},
-			"eliding_enabled": rschema.BoolAttribute{
+			"eliding_enabled": schema.BoolAttribute{
 				Description: "Enable or disable message eliding for clients using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "eliding_enabled"),
+				Optional:    !contains(requiredAttributes, "eliding_enabled"),
 			},
-			"eliding_max_topic_count": rschema.Int64Attribute{
+			"eliding_max_topic_count": schema.Int64Attribute{
 				Description: "The maximum number of topics tracked for message eliding per client connection using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `256`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "eliding_max_topic_count"),
+				Optional:    !contains(requiredAttributes, "eliding_max_topic_count"),
 			},
-			"event_client_provisioned_endpoint_spool_usage_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_client_provisioned_endpoint_spool_usage_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_client_provisioned_endpoint_spool_usage_threshold"),
+				Optional:    !contains(requiredAttributes, "event_client_provisioned_endpoint_spool_usage_threshold"),
+
 				AttributeTypes: EventThresholdByPercentAttributeTypes,
 			},
-			"event_connection_count_per_client_username_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_connection_count_per_client_username_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_connection_count_per_client_username_threshold"),
+				Optional:    !contains(requiredAttributes, "event_connection_count_per_client_username_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_egress_flow_count_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_egress_flow_count_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_egress_flow_count_threshold"),
+				Optional:    !contains(requiredAttributes, "event_egress_flow_count_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_endpoint_count_per_client_username_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_endpoint_count_per_client_username_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_endpoint_count_per_client_username_threshold"),
+				Optional:    !contains(requiredAttributes, "event_endpoint_count_per_client_username_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_ingress_flow_count_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_ingress_flow_count_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_ingress_flow_count_threshold"),
+				Optional:    !contains(requiredAttributes, "event_ingress_flow_count_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_service_smf_connection_count_per_client_username_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_service_smf_connection_count_per_client_username_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_service_smf_connection_count_per_client_username_threshold"),
+				Optional:    !contains(requiredAttributes, "event_service_smf_connection_count_per_client_username_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_service_web_connection_count_per_client_username_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_service_web_connection_count_per_client_username_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_service_web_connection_count_per_client_username_threshold"),
+				Optional:    !contains(requiredAttributes, "event_service_web_connection_count_per_client_username_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_subscription_count_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_subscription_count_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_subscription_count_threshold"),
+				Optional:    !contains(requiredAttributes, "event_subscription_count_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_transacted_session_count_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_transacted_session_count_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_transacted_session_count_threshold"),
+				Optional:    !contains(requiredAttributes, "event_transacted_session_count_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"event_transaction_count_threshold": rschema.ObjectAttribute{
-				Description:    "",
-				Optional:       true,
+			"event_transaction_count_threshold": schema.ObjectAttribute{
+				Description: "",
+				Required:    contains(requiredAttributes, "event_transaction_count_threshold"),
+				Optional:    !contains(requiredAttributes, "event_transaction_count_threshold"),
+
 				AttributeTypes: EventThresholdAttributeTypes,
 			},
-			"max_connection_count_per_client_username": rschema.Int64Attribute{
+			"max_connection_count_per_client_username": schema.Int64Attribute{
 				Description: "The maximum number of client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_connection_count_per_client_username"),
+				Optional:    !contains(requiredAttributes, "max_connection_count_per_client_username"),
 			},
-			"max_egress_flow_count": rschema.Int64Attribute{
+			"max_egress_flow_count": schema.Int64Attribute{
 				Description: "The maximum number of transmit flows that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_egress_flow_count"),
+				Optional:    !contains(requiredAttributes, "max_egress_flow_count"),
 			},
-			"max_endpoint_count_per_client_username": rschema.Int64Attribute{
+			"max_endpoint_count_per_client_username": schema.Int64Attribute{
 				Description: "The maximum number of queues and topic endpoints that can be created by clients with the same Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_endpoint_count_per_client_username"),
+				Optional:    !contains(requiredAttributes, "max_endpoint_count_per_client_username"),
 			},
-			"max_ingress_flow_count": rschema.Int64Attribute{
+			"max_ingress_flow_count": schema.Int64Attribute{
 				Description: "The maximum number of receive flows that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_ingress_flow_count"),
+				Optional:    !contains(requiredAttributes, "max_ingress_flow_count"),
 			},
-			"max_msgs_per_transaction": rschema.Int64Attribute{
+			"max_msgs_per_transaction": schema.Int64Attribute{
 				Description: "The maximum number of publisher and consumer messages combined that is allowed within a transaction for each client associated with this client-profile. Exceeding this limit will result in a transaction prepare or commit failure. Changing this value during operation will not affect existing sessions. It is only validated at transaction creation time. Large transactions consume more resources and are more likely to require retrieving messages from the ADB or from disk to process the transaction prepare or commit requests. The transaction processing rate may diminish if a large number of messages must be retrieved from the ADB or from disk. Care should be taken to not use excessively large transactions needlessly to avoid exceeding resource limits and to avoid reducing the overall broker performance. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `256`. Available since 2.20.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_msgs_per_transaction"),
+				Optional:    !contains(requiredAttributes, "max_msgs_per_transaction"),
 			},
-			"max_subscription_count": rschema.Int64Attribute{
+			"max_subscription_count": schema.Int64Attribute{
 				Description: "The maximum number of subscriptions per client using the Client Profile. This limit is not enforced when a client adds a subscription to an endpoint, except for MQTT QoS 1 subscriptions. In addition, this limit is not enforced when a subscription is added using a management interface, such as CLI or SEMP. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default varies by platform.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_subscription_count"),
+				Optional:    !contains(requiredAttributes, "max_subscription_count"),
 			},
-			"max_transacted_session_count": rschema.Int64Attribute{
+			"max_transacted_session_count": schema.Int64Attribute{
 				Description: "The maximum number of transacted sessions that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `10`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_transacted_session_count"),
+				Optional:    !contains(requiredAttributes, "max_transacted_session_count"),
 			},
-			"max_transaction_count": rschema.Int64Attribute{
+			"max_transaction_count": schema.Int64Attribute{
 				Description: "The maximum number of transactions that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default varies by platform.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "max_transaction_count"),
+				Optional:    !contains(requiredAttributes, "max_transaction_count"),
 			},
-			"msg_vpn_name": rschema.StringAttribute{
+			"msg_vpn_name": schema.StringAttribute{
 				Description: "The name of the Message VPN.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "msg_vpn_name"),
+				Optional:    !contains(requiredAttributes, "msg_vpn_name"),
+
+				PlanModifiers: StringPlanModifiersFor("msg_vpn_name", requiredAttributes),
 			},
-			"queue_control1_max_depth": rschema.Int64Attribute{
+			"queue_control1_max_depth": schema.Int64Attribute{
 				Description: "The maximum depth of the \"Control 1\" (C-1) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_control1_max_depth"),
+				Optional:    !contains(requiredAttributes, "queue_control1_max_depth"),
 			},
-			"queue_control1_min_msg_burst": rschema.Int64Attribute{
+			"queue_control1_min_msg_burst": schema.Int64Attribute{
 				Description: "The number of messages that are always allowed entry into the \"Control 1\" (C-1) priority queue, regardless of the `queueControl1MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_control1_min_msg_burst"),
+				Optional:    !contains(requiredAttributes, "queue_control1_min_msg_burst"),
 			},
-			"queue_direct1_max_depth": rschema.Int64Attribute{
+			"queue_direct1_max_depth": schema.Int64Attribute{
 				Description: "The maximum depth of the \"Direct 1\" (D-1) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_direct1_max_depth"),
+				Optional:    !contains(requiredAttributes, "queue_direct1_max_depth"),
 			},
-			"queue_direct1_min_msg_burst": rschema.Int64Attribute{
+			"queue_direct1_min_msg_burst": schema.Int64Attribute{
 				Description: "The number of messages that are always allowed entry into the \"Direct 1\" (D-1) priority queue, regardless of the `queueDirect1MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_direct1_min_msg_burst"),
+				Optional:    !contains(requiredAttributes, "queue_direct1_min_msg_burst"),
 			},
-			"queue_direct2_max_depth": rschema.Int64Attribute{
+			"queue_direct2_max_depth": schema.Int64Attribute{
 				Description: "The maximum depth of the \"Direct 2\" (D-2) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_direct2_max_depth"),
+				Optional:    !contains(requiredAttributes, "queue_direct2_max_depth"),
 			},
-			"queue_direct2_min_msg_burst": rschema.Int64Attribute{
+			"queue_direct2_min_msg_burst": schema.Int64Attribute{
 				Description: "The number of messages that are always allowed entry into the \"Direct 2\" (D-2) priority queue, regardless of the `queueDirect2MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_direct2_min_msg_burst"),
+				Optional:    !contains(requiredAttributes, "queue_direct2_min_msg_burst"),
 			},
-			"queue_direct3_max_depth": rschema.Int64Attribute{
+			"queue_direct3_max_depth": schema.Int64Attribute{
 				Description: "The maximum depth of the \"Direct 3\" (D-3) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_direct3_max_depth"),
+				Optional:    !contains(requiredAttributes, "queue_direct3_max_depth"),
 			},
-			"queue_direct3_min_msg_burst": rschema.Int64Attribute{
+			"queue_direct3_min_msg_burst": schema.Int64Attribute{
 				Description: "The number of messages that are always allowed entry into the \"Direct 3\" (D-3) priority queue, regardless of the `queueDirect3MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `4`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_direct3_min_msg_burst"),
+				Optional:    !contains(requiredAttributes, "queue_direct3_min_msg_burst"),
 			},
-			"queue_guaranteed1_max_depth": rschema.Int64Attribute{
+			"queue_guaranteed1_max_depth": schema.Int64Attribute{
 				Description: "The maximum depth of the \"Guaranteed 1\" (G-1) priority queue, in work units. Each work unit is 2048 bytes of message data. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `20000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_guaranteed1_max_depth"),
+				Optional:    !contains(requiredAttributes, "queue_guaranteed1_max_depth"),
 			},
-			"queue_guaranteed1_min_msg_burst": rschema.Int64Attribute{
+			"queue_guaranteed1_min_msg_burst": schema.Int64Attribute{
 				Description: "The number of messages that are always allowed entry into the \"Guaranteed 1\" (G-3) priority queue, regardless of the `queueGuaranteed1MaxDepth` value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `255`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "queue_guaranteed1_min_msg_burst"),
+				Optional:    !contains(requiredAttributes, "queue_guaranteed1_min_msg_burst"),
 			},
-			"reject_msg_to_sender_on_no_subscription_match_enabled": rschema.BoolAttribute{
+			"reject_msg_to_sender_on_no_subscription_match_enabled": schema.BoolAttribute{
 				Description: "Enable or disable the sending of a negative acknowledgement (NACK) to a client using the Client Profile when discarding a guaranteed message due to no matching subscription found. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.2.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "reject_msg_to_sender_on_no_subscription_match_enabled"),
+				Optional:    !contains(requiredAttributes, "reject_msg_to_sender_on_no_subscription_match_enabled"),
 			},
-			"replication_allow_client_connect_when_standby_enabled": rschema.BoolAttribute{
+			"replication_allow_client_connect_when_standby_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing clients using the Client Profile to connect to the Message VPN when its replication state is standby. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "replication_allow_client_connect_when_standby_enabled"),
+				Optional:    !contains(requiredAttributes, "replication_allow_client_connect_when_standby_enabled"),
 			},
-			"service_min_keepalive_timeout": rschema.Int64Attribute{
+			"service_min_keepalive_timeout": schema.Int64Attribute{
 				Description: "The minimum client keepalive timeout which will be enforced for client connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `30`. Available since 2.19.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "service_min_keepalive_timeout"),
+				Optional:    !contains(requiredAttributes, "service_min_keepalive_timeout"),
 			},
-			"service_smf_max_connection_count_per_client_username": rschema.Int64Attribute{
+			"service_smf_max_connection_count_per_client_username": schema.Int64Attribute{
 				Description: "The maximum number of SMF client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "service_smf_max_connection_count_per_client_username"),
+				Optional:    !contains(requiredAttributes, "service_smf_max_connection_count_per_client_username"),
 			},
-			"service_smf_min_keepalive_enabled": rschema.BoolAttribute{
+			"service_smf_min_keepalive_enabled": schema.BoolAttribute{
 				Description: "Enable or disable the enforcement of a minimum keepalive timeout for SMF clients. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.19.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "service_smf_min_keepalive_enabled"),
+				Optional:    !contains(requiredAttributes, "service_smf_min_keepalive_enabled"),
 			},
-			"service_web_inactive_timeout": rschema.Int64Attribute{
+			"service_web_inactive_timeout": schema.Int64Attribute{
 				Description: "The timeout for inactive Web Transport client sessions using the Client Profile, in seconds. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `30`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "service_web_inactive_timeout"),
+				Optional:    !contains(requiredAttributes, "service_web_inactive_timeout"),
 			},
-			"service_web_max_connection_count_per_client_username": rschema.Int64Attribute{
+			"service_web_max_connection_count_per_client_username": schema.Int64Attribute{
 				Description: "The maximum number of Web Transport client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "service_web_max_connection_count_per_client_username"),
+				Optional:    !contains(requiredAttributes, "service_web_max_connection_count_per_client_username"),
 			},
-			"service_web_max_payload": rschema.Int64Attribute{
+			"service_web_max_payload": schema.Int64Attribute{
 				Description: "The maximum Web Transport payload size before fragmentation occurs for clients using the Client Profile, in bytes. The size of the header is not included. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000000`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "service_web_max_payload"),
+				Optional:    !contains(requiredAttributes, "service_web_max_payload"),
 			},
-			"tcp_congestion_window_size": rschema.Int64Attribute{
+			"tcp_congestion_window_size": schema.Int64Attribute{
 				Description: "The TCP initial congestion window size for clients using the Client Profile, in multiples of the TCP Maximum Segment Size (MSS). Changing the value from its default of 2 results in non-compliance with RFC 2581. Contact support before changing this value. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `2`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "tcp_congestion_window_size"),
+				Optional:    !contains(requiredAttributes, "tcp_congestion_window_size"),
 			},
-			"tcp_keepalive_count": rschema.Int64Attribute{
+			"tcp_keepalive_count": schema.Int64Attribute{
 				Description: "The number of TCP keepalive retransmissions to a client using the Client Profile before declaring that it is not available. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `5`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "tcp_keepalive_count"),
+				Optional:    !contains(requiredAttributes, "tcp_keepalive_count"),
 			},
-			"tcp_keepalive_idle_time": rschema.Int64Attribute{
+			"tcp_keepalive_idle_time": schema.Int64Attribute{
 				Description: "The amount of time a client connection using the Client Profile must remain idle before TCP begins sending keepalive probes, in seconds. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `3`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "tcp_keepalive_idle_time"),
+				Optional:    !contains(requiredAttributes, "tcp_keepalive_idle_time"),
 			},
-			"tcp_keepalive_interval": rschema.Int64Attribute{
+			"tcp_keepalive_interval": schema.Int64Attribute{
 				Description: "The amount of time between TCP keepalive retransmissions to a client using the Client Profile when no acknowledgement is received, in seconds. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "tcp_keepalive_interval"),
+				Optional:    !contains(requiredAttributes, "tcp_keepalive_interval"),
 			},
-			"tcp_max_segment_size": rschema.Int64Attribute{
+			"tcp_max_segment_size": schema.Int64Attribute{
 				Description: "The TCP maximum segment size for clients using the Client Profile, in bytes. Changes are applied to all existing connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1460`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "tcp_max_segment_size"),
+				Optional:    !contains(requiredAttributes, "tcp_max_segment_size"),
 			},
-			"tcp_max_window_size": rschema.Int64Attribute{
+			"tcp_max_window_size": schema.Int64Attribute{
 				Description: "The TCP maximum window size for clients using the Client Profile, in kilobytes. Changes are applied to all existing connections. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `256`.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "tcp_max_window_size"),
+				Optional:    !contains(requiredAttributes, "tcp_max_window_size"),
 			},
-			"tls_allow_downgrade_to_plain_text_enabled": rschema.BoolAttribute{
+			"tls_allow_downgrade_to_plain_text_enabled": schema.BoolAttribute{
 				Description: "Enable or disable allowing a client using the Client Profile to downgrade an encrypted connection to plain text. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`. Available since 2.8.",
-				Optional:    true,
+				Required:    contains(requiredAttributes, "tls_allow_downgrade_to_plain_text_enabled"),
+				Optional:    !contains(requiredAttributes, "tls_allow_downgrade_to_plain_text_enabled"),
 			},
 		},
 	}
