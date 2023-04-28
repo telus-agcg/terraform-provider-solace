@@ -63,7 +63,7 @@ func (r clientProfileResource) Delete(data *MsgVpnClientProfile, diag *diag.Diag
 }
 
 var msgVpnClientProfileImportRegexp *regexp.Regexp = regexp.MustCompile(
-	"^([^\\s\\*\\?\\/]+)\\/([0-9a-zA-Z_\\-]+)$")
+	`^([^\s\*\?\/]+)\/([0-9a-zA-Z_\-]+)$`)
 
 func (r clientProfileResource) Import(id string, data *MsgVpnClientProfile, diag *diag.Diagnostics) {
 	match := msgVpnClientProfileImportRegexp.FindStringSubmatch(id)

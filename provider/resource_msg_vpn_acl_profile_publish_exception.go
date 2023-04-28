@@ -68,7 +68,7 @@ func (r aclProfilePublishExceptionResource) Delete(data *MsgVpnAclProfilePublish
 }
 
 var msgVpnAclProfilePublishExceptionImportRegexp *regexp.Regexp = regexp.MustCompile(
-	"^([^\\s\\*\\?\\/]+)\\/([0-9a-zA-Z_\\-]+)\\/(smf|mqtt)\\/([^\\s]+)$")
+	`^([^\s\*\?\/]+)\/([0-9a-zA-Z_\-]+)\/(smf|mqtt)\/([^\s]+)$`)
 
 func (r aclProfilePublishExceptionResource) Import(id string, data *MsgVpnAclProfilePublishException, diag *diag.Diagnostics) {
 	match := msgVpnAclProfilePublishExceptionImportRegexp.FindStringSubmatch(id)

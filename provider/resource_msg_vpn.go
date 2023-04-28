@@ -62,7 +62,7 @@ func (r msgVpnResource) Delete(data *MsgVpn, diag *diag.Diagnostics) (*http.Resp
 	return httpResponse, err
 }
 
-var msgVpnImportRegexp *regexp.Regexp = regexp.MustCompile("^([^\\*\\?\\/]+)$")
+var msgVpnImportRegexp *regexp.Regexp = regexp.MustCompile(`^([^\*\?\/]+)$`)
 
 func (r msgVpnResource) Import(id string, data *MsgVpn, diag *diag.Diagnostics) {
 	match := msgVpnImportRegexp.FindStringSubmatch(id)

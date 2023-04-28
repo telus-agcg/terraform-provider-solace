@@ -62,7 +62,7 @@ func (r clientCertAuthorityResource) Delete(data *ClientCertAuthority, diag *dia
 	return httpResponse, err
 }
 
-var clientCertAuthorityImportRegexp *regexp.Regexp = regexp.MustCompile("^([^\\*\\?\\/]+)$")
+var clientCertAuthorityImportRegexp *regexp.Regexp = regexp.MustCompile(`^([^\*\?\/]+)$`)
 
 func (r clientCertAuthorityResource) Import(id string, data *ClientCertAuthority, diag *diag.Diagnostics) {
 	match := clientCertAuthorityImportRegexp.FindStringSubmatch(id)
