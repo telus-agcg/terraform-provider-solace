@@ -63,7 +63,7 @@ func (r queueSubscriptionResource) Delete(data *MsgVpnQueueSubscription, diag *d
 }
 
 var msgVpnQueueSubscriptionImportRegexp *regexp.Regexp = regexp.MustCompile(fmt.Sprintf(
-	"^([^\\s%s]+)\\/([^\\s%s]+)\\/([^\\s]+)$", regexp.QuoteMeta("*?/"), regexp.QuoteMeta("'<>*?&;)")))
+	"^([^\\s%s]+)\\/([^\\s%s]+)\\/([^\\s]+)$", regexp.QuoteMeta("*?/"), regexp.QuoteMeta("'<>*?&;)/")))
 
 func (r queueSubscriptionResource) Import(id string, data *MsgVpnQueueSubscription, diag *diag.Diagnostics) {
 	match := msgVpnQueueSubscriptionImportRegexp.FindStringSubmatch(id)

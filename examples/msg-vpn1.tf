@@ -36,3 +36,9 @@ resource "solace_queue" "vpn1_another_queue" {
   access_type     = "non-exclusive"
   max_ttl         = 60
 }
+
+resource "solace_queue_subscription" "my_queue_subscription" {
+  msg_vpn_name       = solace_msgvpn.vpn1.msg_vpn_name
+  queue_name         = solace_queue.vpn1_another_queue.queue_name
+  subscription_topic = "topic/1/>"
+}
