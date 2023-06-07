@@ -17,7 +17,7 @@ type solaceProviderDataSource[Tdat any] interface {
 	Schema() schema.Schema
 
 	// To inject the provider, which holds the SEMPv2 client
-	SetProvider(solaceProvider)
+	SetProvider(*solaceProvider)
 
 	// NewData returns a new data struct for the datasource. This struct
 	// needs to have `tfsdk:` tags for Terraform to reflect the config
@@ -56,7 +56,9 @@ func (ds *dataSource[Tdat]) Schema(ctx context.Context, req datasource.SchemaReq
 }
 
 func (r *dataSource[Tdat]) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	r.spds.SetProvider(req.ProviderData.(solaceProvider))
+	if provider, ok := req.ProviderData.(*solaceProvider); ok {
+		r.spds.SetProvider(provider)
+	}
 }
 
 func (ds *dataSource[Tdat]) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
