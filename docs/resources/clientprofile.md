@@ -38,16 +38,16 @@ MsgVpnClientProfile
 - `eliding_delay` (Number) The amount of time to delay the delivery of messages to clients using the Client Profile after the initial message has been delivered (the eliding delay interval), in milliseconds. A value of 0 means there is no delay in delivering messages to clients. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`.
 - `eliding_enabled` (Boolean) Enable or disable message eliding for clients using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.
 - `eliding_max_topic_count` (Number) The maximum number of topics tracked for message eliding per client connection using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `256`.
-- `event_client_provisioned_endpoint_spool_usage_threshold` (Object) (see [below for nested schema](#nestedatt--event_client_provisioned_endpoint_spool_usage_threshold))
-- `event_connection_count_per_client_username_threshold` (Object) (see [below for nested schema](#nestedatt--event_connection_count_per_client_username_threshold))
-- `event_egress_flow_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_egress_flow_count_threshold))
-- `event_endpoint_count_per_client_username_threshold` (Object) (see [below for nested schema](#nestedatt--event_endpoint_count_per_client_username_threshold))
-- `event_ingress_flow_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_ingress_flow_count_threshold))
-- `event_service_smf_connection_count_per_client_username_threshold` (Object) (see [below for nested schema](#nestedatt--event_service_smf_connection_count_per_client_username_threshold))
-- `event_service_web_connection_count_per_client_username_threshold` (Object) (see [below for nested schema](#nestedatt--event_service_web_connection_count_per_client_username_threshold))
-- `event_subscription_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_subscription_count_threshold))
-- `event_transacted_session_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_transacted_session_count_threshold))
-- `event_transaction_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_transaction_count_threshold))
+- `event_client_provisioned_endpoint_spool_usage_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_client_provisioned_endpoint_spool_usage_threshold))
+- `event_connection_count_per_client_username_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_connection_count_per_client_username_threshold))
+- `event_egress_flow_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_egress_flow_count_threshold))
+- `event_endpoint_count_per_client_username_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_endpoint_count_per_client_username_threshold))
+- `event_ingress_flow_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_ingress_flow_count_threshold))
+- `event_service_smf_connection_count_per_client_username_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_service_smf_connection_count_per_client_username_threshold))
+- `event_service_web_connection_count_per_client_username_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_service_web_connection_count_per_client_username_threshold))
+- `event_subscription_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_subscription_count_threshold))
+- `event_transacted_session_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_transacted_session_count_threshold))
+- `event_transaction_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_transaction_count_threshold))
 - `max_connection_count_per_client_username` (Number) The maximum number of client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.
 - `max_egress_flow_count` (Number) The maximum number of transmit flows that can be created by one client using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.
 - `max_endpoint_count_per_client_username` (Number) The maximum number of queues and topic endpoints that can be created by clients with the same Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.
@@ -85,7 +85,7 @@ MsgVpnClientProfile
 <a id="nestedatt--event_client_provisioned_endpoint_spool_usage_threshold"></a>
 ### Nested Schema for `event_client_provisioned_endpoint_spool_usage_threshold`
 
-Optional:
+Required:
 
 - `clear_percent` (Number)
 - `set_percent` (Number)
@@ -188,5 +188,3 @@ Optional:
 - `clear_value` (Number)
 - `set_percent` (Number)
 - `set_value` (Number)
-
-

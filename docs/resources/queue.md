@@ -28,9 +28,9 @@ MsgVpnQueue
 - `delivery_count_enabled` (Boolean) Enable or disable the ability for client applications to query the message delivery count of messages received from the Queue. This is a controlled availability feature. Please contact support to find out if this feature is supported for your use case. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.19.
 - `delivery_delay` (Number) The delay, in seconds, to apply to messages arriving on the Queue before the messages are eligible for delivery. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `0`. Available since 2.22.
 - `egress_enabled` (Boolean) Enable or disable the transmission of messages from the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.
-- `event_bind_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_bind_count_threshold))
-- `event_msg_spool_usage_threshold` (Object) (see [below for nested schema](#nestedatt--event_msg_spool_usage_threshold))
-- `event_reject_low_priority_msg_limit_threshold` (Object) (see [below for nested schema](#nestedatt--event_reject_low_priority_msg_limit_threshold))
+- `event_bind_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_bind_count_threshold))
+- `event_msg_spool_usage_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_msg_spool_usage_threshold))
+- `event_reject_low_priority_msg_limit_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_reject_low_priority_msg_limit_threshold))
 - `ingress_enabled` (Boolean) Enable or disable the reception of messages to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.
 - `max_bind_count` (Number) The maximum number of consumer flows that can bind to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1000`.
 - `max_delivered_unacked_msgs_per_flow` (Number) The maximum number of messages delivered but not acknowledged per flow for the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `10000`.
@@ -78,5 +78,3 @@ Optional:
 - `clear_value` (Number)
 - `set_percent` (Number)
 - `set_value` (Number)
-
-

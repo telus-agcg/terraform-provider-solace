@@ -48,12 +48,12 @@ MsgVpn
 - `distributed_cache_management_enabled` (Boolean) Enable or disable managing of cache instances over the message bus. The default value is `true`.
 - `dmr_enabled` (Boolean) Enable or disable Dynamic Message Routing (DMR) for the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.11.
 - `enabled` (Boolean) Enable or disable the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.
-- `event_connection_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_connection_count_threshold))
-- `event_egress_flow_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_egress_flow_count_threshold))
-- `event_egress_msg_rate_threshold` (Object) (see [below for nested schema](#nestedatt--event_egress_msg_rate_threshold))
-- `event_endpoint_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_endpoint_count_threshold))
-- `event_ingress_flow_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_ingress_flow_count_threshold))
-- `event_ingress_msg_rate_threshold` (Object) (see [below for nested schema](#nestedatt--event_ingress_msg_rate_threshold))
+- `event_connection_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_connection_count_threshold))
+- `event_egress_flow_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_egress_flow_count_threshold))
+- `event_egress_msg_rate_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_egress_msg_rate_threshold))
+- `event_endpoint_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_endpoint_count_threshold))
+- `event_ingress_flow_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_ingress_flow_count_threshold))
+- `event_ingress_msg_rate_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_ingress_msg_rate_threshold))
 - `event_large_msg_threshold` (Number) The threshold, in kilobytes, after which a message is considered to be large for the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1024`.
 - `event_log_tag` (String) A prefix applied to all published Events in the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `""`.
 - `event_msg_spool_usage_threshold` (Object) (see [below for nested schema](#nestedatt--event_msg_spool_usage_threshold))
@@ -62,14 +62,14 @@ MsgVpn
 - `event_publish_subscription_mode` (String) Subscription level Event message publishing mode. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `"off"`. The allowed values and their meaning are:  <pre> "off" - Disable client level event message publishing. "on-with-format-v1" - Enable client level event message publishing with format v1. "on-with-no-unsubscribe-events-on-disconnect-format-v1" - As "on-with-format-v1", but unsubscribe events are not generated when a client disconnects. Unsubscribe events are still raised when a client explicitly unsubscribes from its subscriptions. "on-with-format-v2" - Enable client level event message publishing with format v2. "on-with-no-unsubscribe-events-on-disconnect-format-v2" - As "on-with-format-v2", but unsubscribe events are not generated when a client disconnects. Unsubscribe events are still raised when a client explicitly unsubscribes from its subscriptions. </pre>
 - `event_publish_topic_format_mqtt_enabled` (Boolean) Enable or disable Event publish topics in MQTT format. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.
 - `event_publish_topic_format_smf_enabled` (Boolean) Enable or disable Event publish topics in SMF format. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.
-- `event_service_amqp_connection_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_service_amqp_connection_count_threshold))
-- `event_service_mqtt_connection_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_service_mqtt_connection_count_threshold))
-- `event_service_rest_incoming_connection_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_service_rest_incoming_connection_count_threshold))
-- `event_service_smf_connection_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_service_smf_connection_count_threshold))
-- `event_service_web_connection_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_service_web_connection_count_threshold))
-- `event_subscription_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_subscription_count_threshold))
-- `event_transacted_session_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_transacted_session_count_threshold))
-- `event_transaction_count_threshold` (Object) (see [below for nested schema](#nestedatt--event_transaction_count_threshold))
+- `event_service_amqp_connection_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_service_amqp_connection_count_threshold))
+- `event_service_mqtt_connection_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_service_mqtt_connection_count_threshold))
+- `event_service_rest_incoming_connection_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_service_rest_incoming_connection_count_threshold))
+- `event_service_smf_connection_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_service_smf_connection_count_threshold))
+- `event_service_web_connection_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_service_web_connection_count_threshold))
+- `event_subscription_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_subscription_count_threshold))
+- `event_transacted_session_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_transacted_session_count_threshold))
+- `event_transaction_count_threshold` (Attributes) (see [below for nested schema](#nestedatt--event_transaction_count_threshold))
 - `export_subscriptions_enabled` (Boolean) Enable or disable the export of subscriptions in the Message VPN to other routers in the network over Neighbor links. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.
 - `jndi_enabled` (Boolean) Enable or disable JNDI access for clients in the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`. Available since 2.2.
 - `max_connection_count` (Number) The maximum number of client connections to the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.
@@ -168,7 +168,9 @@ Optional:
 
 Optional:
 
+- `clear_percent` (Number)
 - `clear_value` (Number)
+- `set_percent` (Number)
 - `set_value` (Number)
 
 
@@ -197,7 +199,7 @@ Optional:
 <a id="nestedatt--event_ingress_msg_rate_threshold"></a>
 ### Nested Schema for `event_ingress_msg_rate_threshold`
 
-Optional:
+Required:
 
 - `clear_value` (Number)
 - `set_value` (Number)
@@ -208,10 +210,6 @@ Optional:
 
 Optional:
 
-- `clear_percent` (Number)
-- `clear_value` (Number)
-- `set_percent` (Number)
-- `set_value` (Number)
 
 
 <a id="nestedatt--event_service_amqp_connection_count_threshold"></a>
@@ -300,5 +298,3 @@ Optional:
 - `clear_value` (Number)
 - `set_percent` (Number)
 - `set_value` (Number)
-
-
