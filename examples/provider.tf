@@ -1,8 +1,8 @@
 terraform {
   required_providers {
     solace = {
-      source  = "TelusAg/solace"
-      version = ">= 0.6.3"
+      source  = "telus-agcg/solace"
+      version = ">= 0.8.6"
     }
   }
 

@@ -141,26 +141,26 @@ func MsgVpnQueueResourceSchema(requiredAttributes ...string) schema.Schema {
 				Required:    contains(requiredAttributes, "egress_enabled"),
 				Optional:    !contains(requiredAttributes, "egress_enabled"),
 			},
-			"event_bind_count_threshold": schema.ObjectAttribute{
+			"event_bind_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_bind_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_bind_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_msg_spool_usage_threshold": schema.ObjectAttribute{
+			"event_msg_spool_usage_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_msg_spool_usage_threshold"),
 				Optional:    !contains(requiredAttributes, "event_msg_spool_usage_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_reject_low_priority_msg_limit_threshold": schema.ObjectAttribute{
+			"event_reject_low_priority_msg_limit_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_reject_low_priority_msg_limit_threshold"),
 				Optional:    !contains(requiredAttributes, "event_reject_low_priority_msg_limit_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
 			"ingress_enabled": schema.BoolAttribute{
 				Description: "Enable or disable the reception of messages to the Queue. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",

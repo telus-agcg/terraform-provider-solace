@@ -16,6 +16,11 @@ resource "solace_msgvpn" "vpn1" {
     set_value   = 100
     clear_value = 10
   }
+
+  event_connection_count_threshold = {
+    set_percent   = 85
+    clear_percent = 70
+  }
 }
 
 resource "solace_queue" "vpn1_queue" {
@@ -35,6 +40,21 @@ resource "solace_queue" "vpn1_another_queue" {
   egress_enabled  = true
   access_type     = "non-exclusive"
   max_ttl         = 60
+
+  event_bind_count_threshold = {
+    set_percent   = 95
+    clear_percent = 90
+  }
+
+  event_msg_spool_usage_threshold = {
+    set_percent   = 90
+    clear_percent = 85
+  }
+
+  event_reject_low_priority_msg_limit_threshold = {
+    set_value   = 10
+    clear_value = 5
+  }
 }
 
 resource "solace_queue_subscription" "my_queue_subscription" {

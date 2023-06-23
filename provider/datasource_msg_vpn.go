@@ -152,41 +152,41 @@ func (r msgVpnDataSource) Schema() schema.Schema {
 				Description: "Enable or disable the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
 				Optional:    true,
 			},
-			"event_connection_count_threshold": schema.ObjectAttribute{
+			"event_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_egress_flow_count_threshold": schema.ObjectAttribute{
+			"event_egress_flow_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_egress_msg_rate_threshold": schema.ObjectAttribute{
+			"event_egress_msg_rate_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdByValueAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_endpoint_count_threshold": schema.ObjectAttribute{
+			"event_endpoint_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_ingress_flow_count_threshold": schema.ObjectAttribute{
+			"event_ingress_flow_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_ingress_msg_rate_threshold": schema.ObjectAttribute{
+			"event_ingress_msg_rate_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdByValueAttributeTypes,
+				Attributes: EventThresholdByValueDatasourceAttributes,
 			},
 			"event_large_msg_threshold": schema.Int64Attribute{
 				Description: "The threshold, in kilobytes, after which a message is considered to be large for the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1024`.",
@@ -224,53 +224,53 @@ func (r msgVpnDataSource) Schema() schema.Schema {
 				Description: "Enable or disable Event publish topics in SMF format. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `true`.",
 				Optional:    true,
 			},
-			"event_service_amqp_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_amqp_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_service_mqtt_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_mqtt_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_service_rest_incoming_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_rest_incoming_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_service_smf_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_smf_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_service_web_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_web_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_subscription_count_threshold": schema.ObjectAttribute{
+			"event_subscription_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_transacted_session_count_threshold": schema.ObjectAttribute{
+			"event_transacted_session_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
-			"event_transaction_count_threshold": schema.ObjectAttribute{
+			"event_transaction_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Optional:    true,
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdDatasourceAttributes,
 			},
 			"export_subscriptions_enabled": schema.BoolAttribute{
 				Description: "Enable or disable the export of subscriptions in the Message VPN to other routers in the network over Neighbor links. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",

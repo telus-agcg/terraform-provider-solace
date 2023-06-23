@@ -554,47 +554,47 @@ func MsgVpnResourceSchema(requiredAttributes ...string) schema.Schema {
 				Required:    contains(requiredAttributes, "enabled"),
 				Optional:    !contains(requiredAttributes, "enabled"),
 			},
-			"event_connection_count_threshold": schema.ObjectAttribute{
+			"event_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_connection_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_connection_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_egress_flow_count_threshold": schema.ObjectAttribute{
+			"event_egress_flow_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_egress_flow_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_egress_flow_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_egress_msg_rate_threshold": schema.ObjectAttribute{
+			"event_egress_msg_rate_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_egress_msg_rate_threshold"),
 				Optional:    !contains(requiredAttributes, "event_egress_msg_rate_threshold"),
 
-				AttributeTypes: EventThresholdByValueAttributeTypes,
+				Attributes: EventThresholdByValueResourceAttributes,
 			},
-			"event_endpoint_count_threshold": schema.ObjectAttribute{
+			"event_endpoint_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_endpoint_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_endpoint_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_ingress_flow_count_threshold": schema.ObjectAttribute{
+			"event_ingress_flow_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_ingress_flow_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_ingress_flow_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_ingress_msg_rate_threshold": schema.ObjectAttribute{
+			"event_ingress_msg_rate_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_ingress_msg_rate_threshold"),
 				Optional:    !contains(requiredAttributes, "event_ingress_msg_rate_threshold"),
 
-				AttributeTypes: EventThresholdByValueAttributeTypes,
+				Attributes: EventThresholdByValueResourceAttributes,
 			},
 			"event_large_msg_threshold": schema.Int64Attribute{
 				Description: "The threshold, in kilobytes, after which a message is considered to be large for the Message VPN. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `1024`.",
@@ -608,12 +608,12 @@ func MsgVpnResourceSchema(requiredAttributes ...string) schema.Schema {
 
 				PlanModifiers: StringPlanModifiersFor("event_log_tag", requiredAttributes),
 			},
-			"event_msg_spool_usage_threshold": schema.ObjectAttribute{
+			"event_msg_spool_usage_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_msg_spool_usage_threshold"),
 				Optional:    !contains(requiredAttributes, "event_msg_spool_usage_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
 			"event_publish_client_enabled": schema.BoolAttribute{
 				Description: "Enable or disable Client level Event message publishing. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
@@ -645,61 +645,61 @@ func MsgVpnResourceSchema(requiredAttributes ...string) schema.Schema {
 				Required:    contains(requiredAttributes, "event_publish_topic_format_smf_enabled"),
 				Optional:    !contains(requiredAttributes, "event_publish_topic_format_smf_enabled"),
 			},
-			"event_service_amqp_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_amqp_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_service_amqp_connection_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_service_amqp_connection_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_service_mqtt_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_mqtt_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_service_mqtt_connection_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_service_mqtt_connection_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_service_rest_incoming_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_rest_incoming_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_service_rest_incoming_connection_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_service_rest_incoming_connection_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_service_smf_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_smf_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_service_smf_connection_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_service_smf_connection_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_service_web_connection_count_threshold": schema.ObjectAttribute{
+			"event_service_web_connection_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_service_web_connection_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_service_web_connection_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_subscription_count_threshold": schema.ObjectAttribute{
+			"event_subscription_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_subscription_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_subscription_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_transacted_session_count_threshold": schema.ObjectAttribute{
+			"event_transacted_session_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_transacted_session_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_transacted_session_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_transaction_count_threshold": schema.ObjectAttribute{
+			"event_transaction_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_transaction_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_transaction_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
 			"export_subscriptions_enabled": schema.BoolAttribute{
 				Description: "Enable or disable the export of subscriptions in the Message VPN to other routers in the network over Neighbor links. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `false`.",
@@ -1087,6 +1087,7 @@ func MsgVpnResourceSchema(requiredAttributes ...string) schema.Schema {
 				Description: "Determines when to request a client certificate from a Web Transport client connecting via a TLS port. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default value is `\"when-enabled-in-message-vpn\"`. The allowed values and their meaning are:  <pre> \"always\" - Always ask for a client certificate regardless of the \"message-vpn > authentication > client-certificate > shutdown\" configuration. \"never\" - Never ask for a client certificate regardless of the \"message-vpn > authentication > client-certificate > shutdown\" configuration. \"when-enabled-in-message-vpn\" - Only ask for a client-certificate if client certificate authentication is enabled under \"message-vpn >  authentication > client-certificate > shutdown\". </pre>  Available since 2.21.",
 				Required:    contains(requiredAttributes, "service_web_authentication_client_cert_request"),
 				Optional:    !contains(requiredAttributes, "service_web_authentication_client_cert_request"),
+
 				Validators: []validator.String{
 					stringvalidator.OneOf("always", "never", "when-enabled-in-message-vpn"),
 				},

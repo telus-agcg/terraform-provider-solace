@@ -43,7 +43,7 @@ func {{classname}}ResourceSchema(requiredAttributes ...string) schema.Schema {
 				Required: contains(requiredAttributes, "{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}"),
 				Optional: !contains(requiredAttributes, "{{#lambda.lowercase}}{{nameInSnakeCase}}{{/lambda.lowercase}}"),
 				{{^isString}}{{^isNumeric}}{{^isBoolean}}
-				AttributeTypes: {{dataType}}AttributeTypes,
+				Attributes: {{dataType}}ResourceAttributes,
 				{{/isBoolean}}{{/isNumeric}}{{/isString}}
 				{{#vendorExtensions.hasStringValidators}}
 				Validators: []validator.String{

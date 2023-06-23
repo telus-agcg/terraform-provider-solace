@@ -1,5 +1,5 @@
 PKG_NAME=provider
-OPENAPI_GENERATOR_JAR=/usr/local/Cellar/openapi-generator/6.5.0/libexec/openapi-generator-cli.jar
+OPENAPI_GENERATOR_JAR=/usr/local/Cellar/openapi-generator/6.6.0/libexec/openapi-generator-cli.jar
 GO_POST_PROCESS_FILE="$(shell which gofmt) -w"
 MODELS=MsgVpn,$\
 	MsgVpnQueue,$\

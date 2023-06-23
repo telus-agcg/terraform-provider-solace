@@ -308,75 +308,75 @@ func MsgVpnClientProfileResourceSchema(requiredAttributes ...string) schema.Sche
 				Required:    contains(requiredAttributes, "eliding_max_topic_count"),
 				Optional:    !contains(requiredAttributes, "eliding_max_topic_count"),
 			},
-			"event_client_provisioned_endpoint_spool_usage_threshold": schema.ObjectAttribute{
+			"event_client_provisioned_endpoint_spool_usage_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_client_provisioned_endpoint_spool_usage_threshold"),
 				Optional:    !contains(requiredAttributes, "event_client_provisioned_endpoint_spool_usage_threshold"),
 
-				AttributeTypes: EventThresholdByPercentAttributeTypes,
+				Attributes: EventThresholdByPercentResourceAttributes,
 			},
-			"event_connection_count_per_client_username_threshold": schema.ObjectAttribute{
+			"event_connection_count_per_client_username_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_connection_count_per_client_username_threshold"),
 				Optional:    !contains(requiredAttributes, "event_connection_count_per_client_username_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_egress_flow_count_threshold": schema.ObjectAttribute{
+			"event_egress_flow_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_egress_flow_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_egress_flow_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_endpoint_count_per_client_username_threshold": schema.ObjectAttribute{
+			"event_endpoint_count_per_client_username_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_endpoint_count_per_client_username_threshold"),
 				Optional:    !contains(requiredAttributes, "event_endpoint_count_per_client_username_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_ingress_flow_count_threshold": schema.ObjectAttribute{
+			"event_ingress_flow_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_ingress_flow_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_ingress_flow_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_service_smf_connection_count_per_client_username_threshold": schema.ObjectAttribute{
+			"event_service_smf_connection_count_per_client_username_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_service_smf_connection_count_per_client_username_threshold"),
 				Optional:    !contains(requiredAttributes, "event_service_smf_connection_count_per_client_username_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_service_web_connection_count_per_client_username_threshold": schema.ObjectAttribute{
+			"event_service_web_connection_count_per_client_username_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_service_web_connection_count_per_client_username_threshold"),
 				Optional:    !contains(requiredAttributes, "event_service_web_connection_count_per_client_username_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_subscription_count_threshold": schema.ObjectAttribute{
+			"event_subscription_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_subscription_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_subscription_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_transacted_session_count_threshold": schema.ObjectAttribute{
+			"event_transacted_session_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_transacted_session_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_transacted_session_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
-			"event_transaction_count_threshold": schema.ObjectAttribute{
+			"event_transaction_count_threshold": schema.SingleNestedAttribute{
 				Description: "",
 				Required:    contains(requiredAttributes, "event_transaction_count_threshold"),
 				Optional:    !contains(requiredAttributes, "event_transaction_count_threshold"),
 
-				AttributeTypes: EventThresholdAttributeTypes,
+				Attributes: EventThresholdResourceAttributes,
 			},
 			"max_connection_count_per_client_username": schema.Int64Attribute{
 				Description: "The maximum number of client connections per Client Username using the Client Profile. Changes to this attribute are synchronized to HA mates and replication sites via config-sync. The default is the maximum value supported by the platform.",

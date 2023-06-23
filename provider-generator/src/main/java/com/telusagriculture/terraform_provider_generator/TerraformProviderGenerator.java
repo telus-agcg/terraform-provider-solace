@@ -129,6 +129,9 @@ public class TerraformProviderGenerator extends AbstractGoCodegen {
     tfAttributeTypes.put("bool", "BoolAttribute");
     tfAttributeTypes.put("int32", "Int64Attribute");
     tfAttributeTypes.put("int64", "Int64Attribute");
+    tfAttributeTypes.put("EventThreshold", "SingleNestedAttribute");
+    tfAttributeTypes.put("EventThresholdByValue", "SingleNestedAttribute");
+    tfAttributeTypes.put("EventThresholdByPercent", "SingleNestedAttribute");
 
     // set the output folder here
     outputFolder = "generated-code/terraform-provider";

@@ -3,15 +3,46 @@ package provider
 import (
 	"telusag/terraform-provider-solace/sempv2"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var EventThresholdAttributeTypes map[string]attr.Type = map[string]attr.Type{
-	"clear_value":   types.Int64Type,
-	"clear_percent": types.Int64Type,
-	"set_value":     types.Int64Type,
-	"set_percent":   types.Int64Type,
+var EventThresholdResourceAttributes map[string]rschema.Attribute = map[string]rschema.Attribute{
+	"clear_value": rschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
+	"clear_percent": rschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
+	"set_value": rschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
+	"set_percent": rschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
+}
+
+var EventThresholdDatasourceAttributes map[string]dschema.Attribute = map[string]dschema.Attribute{
+	"clear_value": dschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
+	"clear_percent": dschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
+	"set_value": dschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
+	"set_percent": dschema.Int64Attribute{
+		Required: false,
+		Optional: true,
+	},
 }
 
 type EventThreshold struct {

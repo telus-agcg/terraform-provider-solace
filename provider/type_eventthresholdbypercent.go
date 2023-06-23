@@ -3,13 +3,18 @@ package provider
 import (
 	"telusag/terraform-provider-solace/sempv2"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var EventThresholdByPercentAttributeTypes map[string]attr.Type = map[string]attr.Type{
-	"clear_percent": types.Int64Type,
-	"set_percent":   types.Int64Type,
+var EventThresholdByPercentResourceAttributes map[string]schema.Attribute = map[string]schema.Attribute{
+	"clear_percent": schema.Int64Attribute{
+		Required: true,
+		Optional: false,
+	},
+	"set_percent": schema.Int64Attribute{
+		Required: true,
+		Optional: false,
+	},
 }
 
 type EventThresholdByPercent struct {

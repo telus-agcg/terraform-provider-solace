@@ -3,13 +3,30 @@ package provider
 import (
 	"telusag/terraform-provider-solace/sempv2"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 )
 
-var EventThresholdByValueAttributeTypes map[string]attr.Type = map[string]attr.Type{
-	"clear_value": types.Int64Type,
-	"set_value":   types.Int64Type,
+var EventThresholdByValueResourceAttributes map[string]rschema.Attribute = map[string]rschema.Attribute{
+	"clear_value": rschema.Int64Attribute{
+		Required: true,
+		Optional: false,
+	},
+	"set_value": rschema.Int64Attribute{
+		Required: true,
+		Optional: false,
+	},
+}
+
+var EventThresholdByValueDatasourceAttributes map[string]dschema.Attribute = map[string]dschema.Attribute{
+	"clear_value": dschema.Int64Attribute{
+		Required: true,
+		Optional: false,
+	},
+	"set_value": dschema.Int64Attribute{
+		Required: true,
+		Optional: false,
+	},
 }
 
 type EventThresholdByValue struct {
