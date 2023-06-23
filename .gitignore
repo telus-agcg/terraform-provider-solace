@@ -3,3 +3,4 @@ dist
 examples/.terraform*
 examples/*.tfstate*
 provider-generator/.idea
+terraform-provider-solace

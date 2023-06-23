@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/Bahjat/pre-commit-golang
+    rev: v1.0.3
+    hooks:
+      - id: go-fmt-import
+        files: (\.go)$
+      - id: go-vet
+        files: (\.go)$
+      - id: go-lint
+        files: (\.go)$
+  - repo: local
+    hooks:
+      - id: docs
+        name: Generate Terraform provider documentation
+        language: system
+        entry: make generate-docs
+        pass_filenames: false
+      
