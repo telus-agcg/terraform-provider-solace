@@ -20,7 +20,7 @@ var (
 
 func main() {
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/telusag/solace",
+		Address: "registry.terraform.io/telus-agcg/solace",
 	}
 
 	err := providerserver.Serve(context.Background(), provider.New(version), opts)
